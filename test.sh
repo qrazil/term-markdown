@@ -2,8 +2,8 @@
 # The markdown app's own tests. Builds, then runs every tests/*.md through the
 # program and diffs against its tests/*.html.
 #
-#   bash apps/markdown/test.sh          every case
-#   bash apps/markdown/test.sh links    only the cases whose name matches
+#   M31_ROOT=/path/to/m31 bash test.sh          every case
+#   M31_ROOT=/path/to/m31 bash test.sh links    only the cases whose name matches
 #
 # Where a .html came from: `reference.py` derives it from Python `commonmark`,
 # the spec's reference implementation, except for a case with a `.hand` file
@@ -11,14 +11,26 @@
 #
 # The last check is speed, on a generated megabyte. It is a check that the
 # program is not accidentally quadratic, not a benchmark.
+#
+# See build.sh's own header for what M31_ROOT (and LANGC, if the compiler
+# isn't at its own default) need to point at.
 set -uo pipefail
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")"
 
-BIN=apps/markdown/markdown
-T=apps/markdown/tests
+# The "deep-quote" pathological case below (20,000 nested blockquotes) needs
+# more than the runtime's 1 MiB default stack -- see qrazil/m31's own
+# runtime/greenthread.h comment on RT_STACK_SIZE for why the default stays
+# 1 MiB everywhere else and this app asks for more itself instead. 8 MiB
+# matches a typical OS thread's own default stack size, and is plenty of
+# margin (empirically, deep-quote passes cleanly at 8 MiB where 1 MiB
+# started failing around ~4,500 levels).
+export LANG_STACK_SIZE=${LANG_STACK_SIZE:-8388608}
+
+BIN=./markdown
+T=tests
 filter=${1:-}
 
-bash apps/markdown/build.sh >/dev/null || exit 1
+bash build.sh >/dev/null || exit 1
 
 pass=0
 fail=0
@@ -75,7 +87,7 @@ fi
 # --- differential fuzz, when the oracle is installed -------------------------
 if [ -z "$filter" ] && python3 -c "import commonmark" 2>/dev/null; then
     for seed in 1 2 3 4; do
-        if out=$(python3 apps/markdown/fuzz.py "$seed" 250) && [[ $out == *"0 mismatched, 0 crashed" ]]; then
+        if out=$(python3 fuzz.py "$seed" 250) && [[ $out == *"0 mismatched, 0 crashed" ]]; then
             printf '\033[32mok\033[0m   %-20s %s\n' "fuzz seed $seed" "$out"
             pass=$((pass + 1))
         else

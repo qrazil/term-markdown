@@ -2,7 +2,7 @@
 """Regenerate the expected HTML from a reference implementation.
 
     pip install commonmark
-    python3 apps/markdown/reference.py apps/markdown/tests
+    python3 reference.py tests
 
 The oracle is Python `commonmark`, a line-by-line port of cmark, which is the
 CommonMark spec's own reference implementation. A `foo.md` with a `foo.hand`

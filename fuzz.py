@@ -2,8 +2,8 @@
 """Differential fuzz against the reference implementation.
 
     pip install commonmark
-    bash apps/markdown/build.sh
-    python3 apps/markdown/fuzz.py [seed] [cases]
+    M31_ROOT=/path/to/m31 bash build.sh
+    python3 fuzz.py [seed] [cases]
 
 Glues random lines together out of a pool of awkward fragments and compares
 this program's HTML with Python `commonmark`'s, under the one normalisation
