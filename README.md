@@ -2,13 +2,12 @@
 
 The first real application written in this language. About 1 900 lines across
 five modules, no Rust, no C, and nothing in `lib/` changed to make it fit.
-`FRICTION.md` beside this file is the other half of the exercise: what the
+`docs/FRICTION.md` is the other half of the exercise: what the
 language made awkward, what the standard library did not have, and what it
 did better than the alternatives.
 
-    cargo build                       # the compiler
-    bash apps/markdown/build.sh       # ./apps/markdown/markdown
-    bash apps/markdown/test.sh        # the tests
+    M31_ROOT=/path/to/m31 LANGC=/path/to/m31c bash scripts/build.sh   # ./markdown
+    M31_ROOT=/path/to/m31 LANGC=/path/to/m31c bash scripts/test.sh    # the tests
 
     markdown README.md                       the HTML fragment, on stdout
     markdown --full --title T in.md --out f  a whole document, to a file
@@ -97,7 +96,7 @@ executable version of this list.
 
 ## How it is tested
 
-`bash apps/markdown/test.sh` does five things.
+`bash scripts/test.sh` does five things.
 
 1. **The corpus.** `tests/*.md` through the program, diffed against
    `tests/*.html`. Twenty-three cases, chosen for the awkward parts:
@@ -106,13 +105,13 @@ executable version of this list.
    parentheses and with angle brackets, non-ASCII and emoji, CRLF endings,
    empty list items, lazy continuation.
 2. **The oracle.** Every expectation but two is *derived*, by
-   `reference.py`, from Python `commonmark` — a port of cmark, which is
+   `tests/oracles/reference.py`, from Python `commonmark` — a port of cmark, which is
    CommonMark's own reference implementation. One normalisation is applied
    and it is written out in that file: `'` becomes `&#x27;`, because
    `lib/html.escape` escapes all five characters and cmark escapes four. The
    two hand-written cases (`tables`, `divergences`) say so with a `.hand`
    file beside them.
-3. **Differential fuzz.** `fuzz.py` glues random lines together from a pool
+3. **Differential fuzz.** `tests/oracles/fuzz.py` glues random lines together from a pool
    of awkward fragments and compares against the same oracle: 1 000 documents
    per run, four seeds. This found three real bugs that the fixed corpus did
    not.

@@ -24,7 +24,7 @@ import tempfile
 
 import commonmark
 
-BIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "markdown")
+BIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "markdown")
 
 FRAGS = [
     "# heading", "## heading two", "###### six", "#### with *em*",
