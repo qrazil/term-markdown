@@ -47,7 +47,7 @@ jobs:
         run: pip install commonmark
 
       - name: Check formatting
-        run: "$LANGC" fmt --check -r .
+        run: '"$LANGC" fmt --check -r .'
 
       - name: Build and test
         run: bash scripts/test.sh
@@ -73,7 +73,7 @@ jobs:
         run: pip install commonmark
 
       - name: Check formatting
-        run: "$LANGC" fmt --check -r .
+        run: '"$LANGC" fmt --check -r .'
 
       - name: Build and test
         run: bash scripts/test.sh
@@ -99,7 +99,7 @@ jobs:
         run: pip install commonmark
 
       - name: Check formatting
-        run: "$LANGC" fmt --check -r .
+        run: '"$LANGC" fmt --check -r .'
 
       - name: Build and test
         run: bash scripts/test.sh
