@@ -2,20 +2,20 @@
 # The markdown app's own tests. Builds, then runs every tests/*.md through the
 # program and diffs against its tests/*.html.
 #
-#   M31_ROOT=/path/to/m31 bash test.sh          every case
-#   M31_ROOT=/path/to/m31 bash test.sh links    only the cases whose name matches
+#   M31_ROOT=/path/to/m31 bash scripts/test.sh          every case
+#   M31_ROOT=/path/to/m31 bash scripts/test.sh links    only the cases whose name matches
 #
-# Where a .html came from: `reference.py` derives it from Python `commonmark`,
+# Where a .html came from: `tests/oracles/reference.py` derives it from Python `commonmark`,
 # the spec's reference implementation, except for a case with a `.hand` file
 # beside it, which is written by hand and says so.
 #
 # The last check is speed, on a generated megabyte. It is a check that the
 # program is not accidentally quadratic, not a benchmark.
 #
-# See build.sh's own header for what M31_ROOT (and LANGC, if the compiler
+# See scripts/build.sh's own header for what M31_ROOT (and LANGC, if the compiler
 # isn't at its own default) need to point at.
 set -uo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 # The "deep-quote" pathological case below (20,000 nested blockquotes) needs
 # more than the runtime's 1 MiB default stack -- see qrazil/m31's own
@@ -30,7 +30,7 @@ BIN=./markdown
 T=tests
 filter=${1:-}
 
-bash build.sh >/dev/null || exit 1
+bash scripts/build.sh >/dev/null || exit 1
 
 pass=0
 fail=0
@@ -39,7 +39,7 @@ for md in "$T"/*.md; do
     [ -n "$filter" ] && [[ $name != *$filter* ]] && continue
     want="$T/$name.html"
     if [ ! -e "$want" ]; then
-        printf '\033[31mFAIL\033[0m %-20s no expectation (run reference.py)\n' "$name"
+        printf '\033[31mFAIL\033[0m %-20s no expectation (run tests/oracles/reference.py)\n' "$name"
         fail=$((fail + 1))
         continue
     fi
@@ -87,7 +87,7 @@ fi
 # --- differential fuzz, when the oracle is installed -------------------------
 if [ -z "$filter" ] && python3 -c "import commonmark" 2>/dev/null; then
     for seed in 1 2 3 4; do
-        if out=$(python3 fuzz.py "$seed" 250) && [[ $out == *"0 mismatched, 0 crashed" ]]; then
+        if out=$(python3 tests/oracles/fuzz.py "$seed" 250) && [[ $out == *"0 mismatched, 0 crashed" ]]; then
             printf '\033[32mok\033[0m   %-20s %s\n' "fuzz seed $seed" "$out"
             pass=$((pass + 1))
         else

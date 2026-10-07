@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Build markdown into ./markdown.
 #
-#   M31_ROOT=/path/to/m31 bash build.sh          -O2, warnings are errors
-#   M31_ROOT=/path/to/m31 CC=clang bash build.sh
+#   M31_ROOT=/path/to/m31 bash scripts/build.sh          -O2, warnings are errors
+#   M31_ROOT=/path/to/m31 CC=clang bash scripts/build.sh
 #
 # This app is one `.m31` file, compiled by the m31 compiler (m31c) and then
 # linked, as ordinary C, against the m31 RUNTIME's own source files -- there
@@ -17,7 +17,7 @@
 #     matching the version LANGC was built from. No default: a missing
 #     M31_ROOT is a clear error instead of a guess.
 set -uo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 if [ -z "${M31_ROOT:-}" ]; then
     echo "M31_ROOT is not set -- point it at a checkout of github.com/qrazil/m31" \

@@ -476,7 +476,7 @@ doc-comment says "The wall clock can be set backwards; this is a date, not a
 stopwatch" — there is no monotonic reading, and `lib/date`'s header says the
 two clock functions are only squatting there until a `time` module exists.
 There is no allocation counter outside `RC_DEBUG` and no profiler. Every
-timing in `test.sh` is `date +%s%N` in bash around the whole process.
+timing in `scripts/test.sh` is `date +%s%N` in bash around the whole process.
 
 This cost me something real. The program had a quadratic in it — `link()`
 searched forward for a matching `]` at every `[`, so 50 000 unmatched
@@ -485,7 +485,7 @@ and a half seconds, and a megabyte of them would have taken half an hour. It
 is a denial of service in anything that converts untrusted markdown. Nothing
 found it: not the corpus, not the fuzzer, not the 1 MB timing, which uses
 well-formed input. I found it by sitting down and writing seven adversarial
-inputs on purpose, which is now a step in `test.sh`. The fix (`inlines.brackets`,
+inputs on purpose, which is now a step in `scripts/test.sh`. The fix (`inlines.brackets`,
 one stack pass instead of a search per bracket) took it to 7 ms.
 
 The language cannot be blamed for a bad algorithm. But "the program is
@@ -581,7 +581,7 @@ implementation's by `&#x27;` wherever a text node contains an apostrophe.
 Both are correct HTML. The alternative was to write a second escaper in the
 app and not use the standard library's, which is worse. So the test harness
 brings the *oracle* to this program's spelling with one documented
-substitution (`reference.py`, and the `'` → `&#x27;` line is the only one).
+substitution (`tests/oracles/reference.py`, and the `'` → `&#x27;` line is the only one).
 
 I am recording it not as a complaint — `lib/html.m31` argues its case well and
 "no `quote` flag" is the right call — but because it is a concrete instance

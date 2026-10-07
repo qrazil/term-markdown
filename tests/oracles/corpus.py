@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Write the markdown test INPUTS.
 
-    python3 corpus.py tests
-    python3 reference.py tests   # the expectations
+    python3 tests/oracles/corpus.py tests
+    python3 tests/oracles/reference.py tests   # the expectations
 
 The .md files are checked in, so this only has to run when a case is added or
 changed. It exists because two of the inputs cannot survive an editor: the

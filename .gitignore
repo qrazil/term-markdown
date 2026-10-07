@@ -1,2 +1,2 @@
-# The built program. `bash apps/markdown/build.sh` makes it.
+# The built program. `bash scripts/build.sh` makes it.
 markdown

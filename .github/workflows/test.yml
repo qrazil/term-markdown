@@ -15,7 +15,7 @@ name: Test
 # this is a manual step, not automatic, and the tradeoffs of the
 # alternatives (tracking `latest`, or a cross-repo bump-PR bot).
 env:
-  M31_REF: v0.1.1
+  M31_REF: v0.2.0
 
 on:
   push:
@@ -46,8 +46,11 @@ jobs:
       - name: Install the differential-fuzz oracle
         run: pip install commonmark
 
+      - name: Check formatting
+        run: "$LANGC" fmt --check -r .
+
       - name: Build and test
-        run: bash test.sh
+        run: bash scripts/test.sh
 
   test-linux-aarch64:
     name: Test — Linux aarch64
@@ -69,8 +72,11 @@ jobs:
       - name: Install the differential-fuzz oracle
         run: pip install commonmark
 
+      - name: Check formatting
+        run: "$LANGC" fmt --check -r .
+
       - name: Build and test
-        run: bash test.sh
+        run: bash scripts/test.sh
 
   test-macos-arm64:
     name: Test — macOS (arm64)
@@ -92,5 +98,8 @@ jobs:
       - name: Install the differential-fuzz oracle
         run: pip install commonmark
 
+      - name: Check formatting
+        run: "$LANGC" fmt --check -r .
+
       - name: Build and test
-        run: bash test.sh
+        run: bash scripts/test.sh
