@@ -16,10 +16,10 @@ import io;
 import os;
 import render;
 
-// `src` as HTML. This is the whole program in one line; everything else here
+// `source` as HTML. This is the whole program in one line; everything else here
 // is the command line and the files.
-str convert(str src) {
-    return render.document(blocks.parse(src));
+str convert(str source) {
+    return render.document(blocks.parse(source));
 }
 
 // Standard input, whole. `io.read_line_of` would do it a line at a time and
@@ -28,8 +28,8 @@ Result<str, io.Error> read_stdin() {
     io.File input = io.stdin();
     bytes raw = input.read_all()?;
     match (raw.utf8()) {
-        case Some(str s): {
-            return Result<str, io.Error>.Ok(s);
+        case Some(str content): {
+            return Result<str, io.Error>.Ok(content);
         }
         case None: {
             return Result<str, io.Error>.Err(io.Error.InvalidUtf8);
@@ -50,63 +50,63 @@ int fail(str why) {
     return 1;
 }
 
-int run(args.Parsed r) {
-    str input = r.optional("file");
-    str src = "";
+int run(args.Parsed options) {
+    str input = options.optional("file");
+    str source = "";
     if (input.size() == 0 || input == "-") {
         match (read_stdin()) {
-            case Ok(str s): {
-                src = s;
+            case Ok(str content): {
+                source = content;
             }
-            case Err(io.Error e): {
-                return fail("standard input: " + e.to_str());
+            case Err(io.Error error): {
+                return fail("standard input: " + error.to_str());
             }
         }
     } else {
         match (io.read(input)) {
-            case Ok(str s): {
-                src = s;
+            case Ok(str content): {
+                source = content;
             }
-            case Err(io.Error e): {
-                return fail(input + ": " + e.to_str());
+            case Err(io.Error error): {
+                return fail(input + ": " + error.to_str());
             }
         }
     }
-    str body = convert(src);
-    if (r.flag("full")) {
-        str title = r.value("title").or(input);
+    str body = convert(source);
+    if (options.flag("full")) {
+        str title = options.value("title").or(input);
         body = "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\" />\n<title>" + html.escape(title) + "</title>\n</head>\n<body>\n" + body + "</body>\n</html>\n";
     }
-    match (emit(body, r.value("out").or(""))) {
-        case Ok(int n): {
-            if (n != body.size()) {
-                return fail("short write: " + str(n) + " of " + str(body.size()) + " bytes");
+    match (emit(body, options.value("out").or(""))) {
+        case Ok(int written): {
+            if (written != body.size()) {
+                return fail("short write: " + str(written) + " of " + str(body.size()) + " bytes");
             }
             return 0;
         }
-        case Err(io.Error e): {
-            return fail("writing: " + e.to_str());
+        case Err(io.Error error): {
+            return fail("writing: " + error.to_str());
         }
     }
 }
 
-args.Parser cli = args.Parser("markdown", summary: "CommonMark (a subset) to HTML");
-cli.flag("full", help: "wrap the output in a whole HTML document");
-cli.value("title", placeholder: "TEXT", help: "the <title> of a --full document");
-cli.value("out", short: "o", placeholder: "PATH", help: "write here instead of standard output");
-cli.optional("file", "-", help: "the markdown to read; - or nothing is standard input");
-List<str> argv = os.args();
-argv.remove_at(0);
-match (cli.parse(argv)) {
-    case Err(args.UsageError e): {
-        io.eprint("markdown: " + e.to_str());
-        io.eprint(cli.usage());
+args.Parser parser = args.Parser("markdown", summary: "CommonMark (a subset) to HTML");
+parser.flag("full", help: "wrap the output in a whole HTML document");
+parser.value("title", placeholder: "TEXT", help: "the <title> of a --full document");
+parser.value("out", short: "o", placeholder: "PATH", help: "write here instead of standard output");
+parser.optional("file", "-", help: "the markdown to read; - or nothing is standard input");
+List<str> arguments = os.args();
+arguments.remove_at(0);
+match (parser.parse(arguments)) {
+    case Err(args.UsageError error): {
+        io.eprint("markdown: " + error.to_str());
+        io.eprint(parser.usage());
         os.exit(2);
     }
     case Ok(args.Parsed parsed): {
         match (parsed.help()) {
-            case Some(str h): {
-                print(h);
+            case Some(str help_text): {
+                print(help_text);
             }
             case None: {
                 int code = run(parsed);
