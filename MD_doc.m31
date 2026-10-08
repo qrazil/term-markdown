@@ -72,3 +72,21 @@ pub enum Block {
     Bullets(Listing);
     Grid(Table);
 }
+
+/// A link reference definition, `[label]: /url "title"`: where a reference
+/// link or image sent to `label` points. `href` is the destination with its
+/// backslash escapes resolved and `title` the title likewise, "" for none.
+/// Neither is HTML-escaped yet; the renderer does that, as it does for an
+/// inline link.
+pub type Reference {
+    pub str href;
+    pub str title;
+}
+
+/// A parsed document: its blocks, and every definition found anywhere in it
+/// (inside a block quote or a list item too), keyed by the label as
+/// `MD_inlines.normalize_label` writes it. Definitions leave no block behind.
+pub type Document {
+    pub List<Block> blocks;
+    pub Map<str, Reference> references;
+}

@@ -1,0 +1,189 @@
+// Link reference definitions: `[label]: /url "title"`.
+//
+// A definition is not a block of its own. CommonMark finds them at the START
+// of a paragraph -- which is why one cannot interrupt a paragraph -- takes
+// them out of its text, and files them under their label for the inline
+// parser to look up. `MD_blocks.paragraph` calls `parse_definition` in a
+// loop over the paragraph's text and keeps whatever is left.
+//
+// Everything works in offsets into the one string, so a paragraph of ten
+// thousand definitions is ten thousand calls and no copy of the rest.
+import MD_doc;
+import MD_inlines;
+
+// A destination or a title, and the offset just past it.
+type Piece {
+    bool is_found;
+    str value;
+    int after;
+}
+
+Piece no_piece() {
+    return Piece(false, "", 0);
+}
+
+bool is_blank_byte(int character) {
+    return character == ' ' || character == '\t';
+}
+
+// `start`, moved past spaces and tabs.
+int skip_blanks(str source, int start) {
+    int index = start;
+    while (index < source.size() && is_blank_byte(source.byte_at(index))) {
+        index = index + 1;
+    }
+    return index;
+}
+
+// `start`, moved past spaces and tabs and at most one line ending (and the
+// blanks after it): the "optional white space with up to one line ending" that
+// the spec allows between the parts of a definition.
+int skip_one_line(str source, int start) {
+    int index = skip_blanks(source, start);
+    if (index < source.size() && source.byte_at(index) == '\n') {
+        index = skip_blanks(source, index + 1);
+    }
+    return index;
+}
+
+// If only blanks are left on the line that `start` is on: the offset of the
+// next line (or the end of `source`). Otherwise -1.
+int end_of_line(str source, int start) {
+    int index = skip_blanks(source, start);
+    if (index >= source.size()) {
+        return source.size();
+    }
+    if (source.byte_at(index) == '\n') {
+        return index + 1;
+    }
+    return -1;
+}
+
+// `<...>` or a run without white space and with balanced parentheses.
+Piece destination(str source, int start) {
+    int length = source.size();
+    if (start >= length) {
+        return no_piece();
+    }
+    if (source.byte_at(start) == '<') {
+        int index = start + 1;
+        while (index < length) {
+            int character = source.byte_at(index);
+            if (character == '>') {
+                return Piece(true, MD_inlines.unescape(source.substr(start + 1, index)), index + 1);
+            }
+            if (character == '<' || character == '\n') {
+                return no_piece();
+            }
+            if (character == '\\' && index + 1 < length && source.byte_at(index + 1) != '\n') {
+                index = index + 1;
+            }
+            index = index + 1;
+        }
+        return no_piece();
+    }
+    int index = start;
+    int depth = 0;
+    while (index < length) {
+        int character = source.byte_at(index);
+        if (character == '\\' && index + 1 < length && MD_inlines.is_punctuation_byte(source.byte_at(index + 1))) {
+            index = index + 2;
+            continue;
+        }
+        if (MD_inlines.is_space_byte(character)) {
+            break;
+        }
+        if (character == '(') {
+            depth = depth + 1;
+        } else if (character == ')') {
+            if (depth == 0) {
+                break;
+            }
+            depth = depth - 1;
+        }
+        index = index + 1;
+    }
+    if (index == start || depth != 0) {
+        return no_piece();
+    }
+    return Piece(true, MD_inlines.unescape(source.substr(start, index)), index);
+}
+
+// `"..."`, `'...'` or `(...)`. The first two may hold anything but their own
+// quote, a parenthesised one no parenthesis; a backslash escapes any of them.
+Piece title(str source, int start) {
+    int length = source.size();
+    if (start >= length) {
+        return no_piece();
+    }
+    int opener = source.byte_at(start);
+    int closer = opener;
+    if (opener == '(') {
+        closer = ')';
+    } else if (opener != '"' && opener != '\'') {
+        return no_piece();
+    }
+    int index = start + 1;
+    while (index < length) {
+        int character = source.byte_at(index);
+        if (character == closer) {
+            return Piece(true, MD_inlines.unescape(source.substr(start + 1, index)), index + 1);
+        }
+        if (opener == '(' && character == '(') {
+            return no_piece();
+        }
+        if (character == '\\' && index + 1 < length) {
+            index = index + 1;
+        }
+        index = index + 1;
+    }
+    return no_piece();
+}
+
+/// If `source` has a link reference definition starting at `start`: file it
+/// in `references` (unless its label is already there -- the first definition
+/// of a label wins) and return the offset just past the definition and its
+/// line ending. Otherwise -1, and nothing is filed.
+///
+/// The label, destination and title may be separated by spaces and one line
+/// ending each. A title that is followed by more text on its line is not a
+/// title -- but if the destination ends its line, the definition stands
+/// without it, and what looked like a title starts the paragraph that is left.
+pub int parse_definition(str source, int start, Map<str, MD_doc.Reference> references) {
+    int label_stop = MD_inlines.label_end(source, start);
+    if (label_stop < 0 || label_stop >= source.size() || source.byte_at(label_stop) != ':') {
+        return -1;
+    }
+    str key = MD_inlines.normalize_label(source.substr(start + 1, label_stop - 1));
+    if (key.size() == 0) {
+        return -1;
+    }
+    Piece target = destination(source, skip_one_line(source, label_stop + 1));
+    if (!target.is_found) {
+        return -1;
+    }
+    str caption = "";
+    int stop = target.after;
+    int line_end = -1;
+    int title_start = skip_one_line(source, target.after);
+    if (title_start > target.after) {
+        Piece quoted = title(source, title_start);
+        if (quoted.is_found) {
+            line_end = end_of_line(source, quoted.after);
+            if (line_end >= 0) {
+                caption = quoted.value;
+                stop = quoted.after;
+            }
+        }
+    }
+    if (line_end < 0) {
+        line_end = end_of_line(source, stop);
+    }
+    if (line_end < 0) {
+        return -1;
+    }
+    if (!references.contains(key)) {
+        references.set(key, MD_doc.Reference(target.value, caption));
+    }
+    return line_end;
+}

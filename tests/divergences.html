@@ -6,6 +6,4 @@
 <p>&lt;not a link&gt;</p>
 <p>Inline raw HTML is escaped too: a &lt;span&gt;span&lt;/span&gt; and a &lt;br&gt; break.</p>
 <p>Entity references are not decoded: &amp;amp; &amp;copy; &amp;#35; &amp;#x2764;</p>
-<p>Link reference definitions are not supported, so this is a paragraph:</p>
-<p>[ref]: /url &quot;title&quot;</p>
-<p>and [this][ref] is not a link, nor is [this] on its own.</p>
+<p>A link inside a link text is not split the way CommonMark splits it: <a href="/u">a [b](/x)</a></p>

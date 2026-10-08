@@ -8,13 +8,22 @@
 // Inline content is NOT parsed here. A block keeps the raw source of its own
 // text and `render` parses it later (see `doc`).
 import MD_doc;
+import MD_refs;
 import math;
 import text;
 
-/// `source` as blocks. Line endings are normalised and leading tabs expanded
-/// before anything else looks at the text.
-pub List<MD_doc.Block> parse(str source) {
-    return parse_lines(split_lines(source));
+/// `source` as blocks, and the link reference definitions found in them.
+/// Line endings are normalised and leading tabs expanded before anything else
+/// looks at the text.
+///
+/// A definition can sit anywhere a paragraph can -- at the top, in a block
+/// quote, in a list item -- and is used from anywhere, before it or after, so
+/// one map is filled as the whole tree is built and handed to the renderer
+/// with it. A definition leaves no block: the paragraph it began loses it.
+pub MD_doc.Document parse(str source) {
+    Map<str, MD_doc.Reference> references = {};
+    List<MD_doc.Block> blocks = parse_lines(split_lines(source), references);
+    return MD_doc.Document(blocks, references);
 }
 
 // --- lines -------------------------------------------------------------------
@@ -287,7 +296,7 @@ void lazily(List<str> held, str line) {
 
 // --- the parser --------------------------------------------------------------
 
-List<MD_doc.Block> parse_lines(List<str> lines) {
+List<MD_doc.Block> parse_lines(List<str> lines, Map<str, MD_doc.Reference> references) {
     List<MD_doc.Block> out = [];
     int line_count = lines.size();
     int line_index = 0;
@@ -319,18 +328,18 @@ List<MD_doc.Block> parse_lines(List<str> lines) {
             continue;
         }
         if (stripped.starts_with(">")) {
-            line_index = block_quote(out, lines, line_index);
+            line_index = block_quote(out, lines, line_index, references);
             continue;
         }
         if (marker_of(stripped).is_found) {
-            line_index = list_at(out, lines, line_index);
+            line_index = list_at(out, lines, line_index, references);
             continue;
         }
         if (is_table_head(lines, line_index)) {
             line_index = table_at(out, lines, line_index);
             continue;
         }
-        line_index = paragraph(out, lines, line_index);
+        line_index = paragraph(out, lines, line_index, references);
     }
     return out;
 }
@@ -395,7 +404,7 @@ int fenced_code(List<MD_doc.Block> out, List<str> lines, int start_line) {
     return line_index;
 }
 
-int block_quote(List<MD_doc.Block> out, List<str> lines, int start_line) {
+int block_quote(List<MD_doc.Block> out, List<str> lines, int start_line, Map<str, MD_doc.Reference> references) {
     int line_count = lines.size();
     List<str> inner = [];
     int line_index = start_line;
@@ -430,11 +439,11 @@ int block_quote(List<MD_doc.Block> out, List<str> lines, int start_line) {
         lazily(inner, line);
         line_index = line_index + 1;
     }
-    out.push(MD_doc.Block.Quoted(MD_doc.Quote(parse_lines(inner))));
+    out.push(MD_doc.Block.Quoted(MD_doc.Quote(parse_lines(inner, references))));
     return line_index;
 }
 
-int paragraph(List<MD_doc.Block> out, List<str> lines, int start_line) {
+int paragraph(List<MD_doc.Block> out, List<str> lines, int start_line, Map<str, MD_doc.Reference> references) {
     int line_count = lines.size();
     List<str> paragraph_lines = [];
     int line_index = start_line;
@@ -448,7 +457,14 @@ int paragraph(List<MD_doc.Block> out, List<str> lines, int start_line) {
         int line_indent = indent_of(line);
         str stripped = chop(line, line_indent);
         if (line_indent < 4 && paragraph_lines.size() > 0 && setext_level(stripped) > 0) {
-            out.push(MD_doc.Block.Heading(MD_doc.Heading(setext_level(stripped), paragraph_lines.join("\n").trim())));
+            // Definitions come off the front of the heading's text first. If
+            // that leaves nothing the underline underlines nothing: it is
+            // left for `parse_lines` to read as what it would be on its own.
+            str heading_text = without_definitions(paragraph_lines.join("\n"), references);
+            if (heading_text.size() == 0) {
+                return line_index;
+            }
+            out.push(MD_doc.Block.Heading(MD_doc.Heading(setext_level(stripped), heading_text)));
             return line_index + 1;
         }
         if (line_indent < 4 && (is_block_start(stripped) || can_interrupt_paragraph(stripped))) {
@@ -462,14 +478,34 @@ int paragraph(List<MD_doc.Block> out, List<str> lines, int start_line) {
         // The trailing spaces of the LAST line are not a hard break -- there
         // is no line after them -- so the paragraph loses them here, where
         // the inline parser would otherwise print them.
-        out.push(MD_doc.Block.Paragraph(paragraph_lines.join("\n").trim()));
+        str body = without_definitions(paragraph_lines.join("\n"), references);
+        if (body.size() > 0) {
+            out.push(MD_doc.Block.Paragraph(body));
+        }
     }
     return line_index;
 }
 
+// `paragraph_text` less the link reference definitions it begins with, which
+// are filed in `references`, and trimmed. A definition can only be first: one
+// further down is just text, which is how a definition fails to interrupt a
+// paragraph.
+str without_definitions(str paragraph_text, Map<str, MD_doc.Reference> references) {
+    int offset = 0;
+    int next = MD_refs.parse_definition(paragraph_text, offset, references);
+    while (next >= 0) {
+        offset = next;
+        next = MD_refs.parse_definition(paragraph_text, offset, references);
+    }
+    if (offset == 0) {
+        return paragraph_text.trim();
+    }
+    return paragraph_text.substr(offset, paragraph_text.size()).trim();
+}
+
 // --- lists -------------------------------------------------------------------
 
-int list_at(List<MD_doc.Block> out, List<str> lines, int start_line) {
+int list_at(List<MD_doc.Block> out, List<str> lines, int start_line, Map<str, MD_doc.Reference> references) {
     int line_count = lines.size();
     Marker first = marker_of(chop(lines[start_line], indent_of(lines[start_line])));
     List<MD_doc.Item> items = [];
@@ -537,7 +573,7 @@ int list_at(List<MD_doc.Block> out, List<str> lines, int start_line) {
             }
             is_ended = true;
         }
-        items.push(MD_doc.Item(parse_lines(body)));
+        items.push(MD_doc.Item(parse_lines(body, references)));
         // A blank line between two items makes the whole list loose -- but
         // only if another item really follows. `- - -` after a blank line
         // looks like a marker and is a thematic break, which ends the list

@@ -97,7 +97,7 @@ int run(args.Parsed options) {
             }
         }
     }
-    List<MD_doc.Block> tree = MD_blocks.parse(source);
+    MD_doc.Document tree = MD_blocks.parse(source);
     str body = MD_render.document(tree);
     if (options.flag("full")) {
         str title = options.value("title").or("");

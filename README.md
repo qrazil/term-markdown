@@ -1,7 +1,7 @@
 # `markdown` — a CommonMark subset to HTML
 
-The first real application written in this language. About 2 300 lines across
-seven modules, no Rust, no C, and nothing in `lib/` changed to make it fit.
+The first real application written in this language. About 2 600 lines across
+eight modules, no Rust, no C, and nothing in `lib/` changed to make it fit.
 `docs/FRICTION.md` is the other half of the exercise: what the
 language made awkward, what the standard library did not have, and what it
 did better than the alternatives.
@@ -74,11 +74,12 @@ they sit in.
 |---|---|
 | `main.m31` | the command line (`lib/args`) and the files (`lib/io`) |
 | `MD_blocks.m31` | the block parser: source to a list of `MD_doc.Block` |
-| `MD_inlines.m31` | the inline parser: one block's raw text to HTML |
+| `MD_inlines.m31` | the inline parser: one block's raw text to HTML, given the document's references |
 | `MD_render.m31` | the tree to HTML, with cmark's whitespace |
 | `MD_theme.m31` | the `--full` page: the embedded stylesheet, the three themes, the head and body |
 | `MD_title.m31` | the default `<title>`: first heading, else file stem, else `Document` |
-| `MD_doc.m31` | the tree's types alone, so the other three need not import each other |
+| `MD_refs.m31` | link reference definitions: one definition parsed off the front of a paragraph |
+| `MD_doc.m31` | the tree's types alone, so the other modules need not import each other |
 
 The block parser is line based and recursive: a container — a block quote, a
 list item — strips its own marker off the lines it owns and hands the rest
@@ -101,7 +102,8 @@ with `start=`), nesting to any depth, and the tight/loose distinction.
 space-stripping rule), emphasis and strong with `*` and `_` including the
 flanking and rule-of-three rules, inline links with `<…>` and bare
 destinations, balanced parentheses, and `"…"`/`'…'`/`(…)` titles, images with
-plain-text `alt`, URI and email autolinks, hard breaks (two trailing spaces,
+plain-text `alt`, full, collapsed and shortcut reference links and images
+(below), URI and email autolinks, hard breaks (two trailing spaces,
 or a trailing backslash), soft breaks.
 
 **Escaping.** Text goes through `lib/html.escape`. Link destinations go
@@ -111,6 +113,40 @@ through this program's `escape_href`, which reproduces cmark's
 **Tables.** GFM pipe tables, with `:---`, `:---:` and `---:` alignment,
 escaped `\|`, and rows padded or cut to the header's width. This is an
 extension, not CommonMark, so its expected output is written by hand.
+
+**Link reference definitions.** `[label]: /url "title"`, with the destination
+bare or in `<…>` and the title in `"…"`, `'…'` or `(…)`. Up to three spaces of
+indent; the destination and title may each be on the next line. A label
+matches case-insensitively (Unicode case folding, through `lib/unicode.fold`)
+with runs of white space collapsed; the first definition of a label wins.
+Definitions are taken off the front of a paragraph, so they never reach the
+output and cannot interrupt a paragraph (`text` on the line before makes it
+text), and they work anywhere in the document, forward references included:
+the block parser fills a `Map<str, Reference>` as it goes, and the inline
+parser runs last, after the whole document is read. The forms are
+`[text][label]`, `[text][]`, `[label]` and their `![…]` image versions; an
+inline `(…)` destination is tried first, and a reference that names nothing
+stays literal text. A title that is followed by more text on its line is not
+a title; if the destination ends its line, the definition stands without it
+and the "title" starts the paragraph that is left. Labels are limited to
+1 000 characters, as in the spec. Cost is linear: a definition is parsed in
+place by offset, and lookup is a map.
+
+Not supported, or different:
+
+- A definition inside a block quote or list item *is* found (the container is
+  stripped first and the text parsed as a paragraph), and the reference is
+  document-wide, as in CommonMark. What is missing is cmark's rule that a
+  list whose only paragraph in an item was a definition is judged tight or
+  loose *after* that paragraph is removed; here it is judged before. A list
+  item such as `1. [a]: /a`, a blank line, then more text is loose here and
+  tight in cmark. (List looseness has other, older differences from cmark in
+  nested and fenced-code cases; they are independent of this.)
+- A link inside a link's text, `[a [b](/x)](/u)`: CommonMark makes the inner
+  link and leaves the outer text literal; here the outer one wins. This
+  applies to the reference forms too.
+- A definition is recognised only at the start of a paragraph. One in a table
+  cell, or after a line of text, is just text.
 
 ## What is left out, and why
 
@@ -125,11 +161,6 @@ goal. Each of these was left out on purpose:
   Decoding them means shipping HTML5's two-thousand-entry table, which
   `lib/html` refuses to do for exactly the same reason (see `lib/html.m31`,
   "There is no `unescape`").
-- **Link reference definitions** and reference, collapsed and shortcut links
-  (`[foo]: /url`, `[text][ref]`, `[foo]`). These need a document-wide first
-  pass to collect definitions before any inline is parsed. The architecture
-  here already allows it — blocks keep their raw text precisely so inlines
-  run last — so this is the omission most likely to be filled in.
 - **Unicode character classes in the emphasis rules.** Flanking is decided on
   bytes, so every byte of a non-ASCII character is "other", which is what a
   letter is. `é` and `字` behave correctly; `»` and U+00A0 are treated as
@@ -139,8 +170,7 @@ goal. Each of these was left out on purpose:
   tables.
 - **Tabs other than in leading whitespace.** A leading tab expands to the next
   four-column stop; a tab inside a line is content and is left as written.
-- **Links inside links.** A `[` inside a link's text is literal, which is
-  CommonMark's outcome by a different route.
+- **Links inside links**, split the way CommonMark splits them (see above).
 - **Smart punctuation, footnotes, strikethrough, task lists, front matter.**
   Not in CommonMark, or not wanted.
 
@@ -152,17 +182,17 @@ executable version of this list.
 `bash scripts/test.sh` does six things.
 
 1. **The corpus.** `tests/*.md` through the program, diffed against
-   `tests/*.html`. Twenty-three cases, chosen for the awkward parts:
+   `tests/*.html`. Twenty-six cases, chosen for the awkward parts:
    unterminated emphasis, `*a**b*` and `**a*b**`, mixed nested list markers,
    backticks inside fences and fences inside backticks, links with
    parentheses and with angle brackets, non-ASCII and emoji, CRLF endings,
    empty list items, lazy continuation.
-2. **The oracle.** Every expectation but two is *derived*, by
+2. **The oracle.** Every expectation but three is *derived*, by
    `tests/oracles/reference.py`, from Python `commonmark` — a port of cmark, which is
    CommonMark's own reference implementation. One normalisation is applied
    and it is written out in that file: `'` becomes `&#x27;`, because
    `lib/html.escape` escapes all five characters and cmark escapes four. The
-   two hand-written cases (`tables`, `divergences`) say so with a `.hand`
+   three hand-written cases (`tables`, `divergences`, `references-edge`) say so with a `.hand`
    file beside them.
 3. **Differential fuzz.** `tests/oracles/fuzz.py` glues random lines together from a pool
    of awkward fragments and compares against the same oracle: 1 000 documents
@@ -180,7 +210,9 @@ executable version of this list.
    a deliberate change with `UPDATE_GOLDEN=1 bash scripts/test.sh full`.
 6. **Pathological inputs and speed.** 20 000 nested block quotes, 400 nested
    list items, 20 000 emphasis runs in one paragraph, a 2 MB single line,
-   50 000 unmatched backticks, 50 000 unmatched `[`, 20 000 unmatched `![`,
+   50 000 unmatched backticks, 50 000 unmatched `[`, 20 000 unmatched `![`, 20 000 definitions (in one
+   paragraph, in separate ones, and all with one label), tens of thousands of
+   references (matched and not), 5 000 nested brackets,
    each under two seconds; and a generated 1 MB document, about 118 ms at
    `-O2`. These are guards against an algorithm, not a benchmark — the
    unmatched-`[` case took 4.5 seconds before `MD_inlines.brackets` replaced a

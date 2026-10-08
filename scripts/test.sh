@@ -166,6 +166,9 @@ if [ -z "$filter" ] || [ "$filter" = full ]; then
     check "title: escaped once" '<title>a &amp;amp; b &quot;q&quot; &#x27;s&#x27;</title>' \
           "$(printf '# a &amp; b "q" '"'"'s'"'"'\n' | $BIN --full | title_of)"
     check "title: skips empty h1" '<title>Real</title>' "$(printf '#\n\n# Real\n' | $BIN --full | title_of)"
+    check "title: reference link" '<title>See the docs</title>' \
+          "$(printf '# See [the docs][d]\n\n[D]: /x\n' | $BIN --full | title_of)"
+    check "only definitions: empty" "0" "$(printf '[a]: /x\n' | $BIN | wc -c)"
     check "title: h2 is not a title" '<title>Document</title>' "$(printf '## Not it\n' | $BIN --full | title_of)"
 
     # Errors. Nothing is written when the page cannot be built.
@@ -242,6 +245,14 @@ open(d + "/long-line.md", "w").write("x" * 2000000 + "\n")
 open(d + "/backticks.md", "w").write("`" * 50000 + "\n")
 open(d + "/brackets.md", "w").write("[" * 50000 + "\n")
 open(d + "/images.md", "w").write("![" * 20000 + "\n")
+# Link reference definitions: the pre-pass and the lookups must stay linear.
+open(d + "/defs-one-paragraph.md", "w").write("".join("[d%d]: /u%d\n" % (i, i) for i in range(20000)) + "\n[d19999] [d0]\n")
+open(d + "/defs-paragraphs.md", "w").write("".join("[d%d]: /u%d \"t\"\n\n" % (i, i) for i in range(20000)) + "[d19999] [d0]\n")
+open(d + "/refs-many.md", "w").write("[x]: /x\n\n" + "[x] [x][] [y][x] ![x] " * 10000 + "\n")
+open(d + "/refs-unmatched.md", "w").write("[x]: /x\n\n" + "[nope] [a][b] ![c][d] " * 10000 + "\n")
+open(d + "/refs-nested.md", "w").write("[x]: /x\n\n" + "[" * 5000 + "x" + "]" * 5000 + "\n")
+open(d + "/refs-same-label.md", "w").write("[x]: /x\n" * 20000 + "\n[x]\n")
+open(d + "/refs-long-label.md", "w").write("[" + "a " * 20000 + "]: /x\n\n[" + "a " * 20000 + "]\n")
 PY
     for p in "$P"/*.md; do
         name=$(basename "$p" .md)

@@ -11,13 +11,13 @@ import text;
 const str FALLBACK = "Document";
 
 /// The title for a document read from `path` ("" or "-" for standard input)
-/// whose top-level blocks are `block_list`.
-pub str default_title(List<MD_doc.Block> block_list, str path) {
-    for (MD_doc.Block current_block in block_list) {
+/// which `parsed` is.
+pub str default_title(MD_doc.Document parsed, str path) {
+    for (MD_doc.Block current_block in parsed.blocks) {
         match (current_block) {
             case Heading(MD_doc.Heading heading): {
                 if (heading.level == 1) {
-                    str heading_text = plain_text(MD_inlines.render(heading.text));
+                    str heading_text = plain_text(MD_inlines.render(heading.text, parsed.references));
                     if (heading_text.size() > 0) {
                         return heading_text;
                     }

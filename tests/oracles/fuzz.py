@@ -8,8 +8,14 @@
 Glues random lines together out of a pool of awkward fragments and compares
 this program's HTML with Python `commonmark`'s, under the one normalisation
 `reference.py` documents. Every fragment in the pool is inside the subset --
-no raw HTML, no entity references, no link reference definitions -- so a
-mismatch is a bug here and not a documented divergence.
+no raw HTML, no entity references -- so a mismatch is a bug here and not a
+documented divergence. Link reference definitions ARE in the pool, with these
+exceptions, each a place where the oracle itself is wrong (it contradicts the
+spec) and so not usable as a judge: a title followed by more text on its line
+(Python `commonmark` keeps the title it should discard), an unbalanced `(` in a
+bare destination (it accepts one), and a definition followed by a setext
+underline (it leaves an empty `<p></p>`, which `ref()` below removes). The
+first two are in tests/references-edge.md, written by hand.
 
 This found, among others: the rule of three reading the mutated delimiter
 stack instead of the original flanking; a lazy continuation line being
@@ -45,6 +51,18 @@ FRAGS = [
     "[t]", "[t](", "![a](/i)", "[a [b] c](/u)",
     "\\*esc\\*", "\\\\", "\\[", "a & b < c > d \" e ' f",
     "Setext", "===", "café 中文 👍", "  indented para",
+    # Link reference definitions and the three reference forms. The labels
+    # `ref`, `Ref 2`, `ref3` and `ref4` are never the text of an inline-link
+    # fragment above: a reference inside the text of an inline link is a
+    # known divergence (README, "What is left out"), and so is `[t]` there.
+    "[ref]: /r", "[ref]: /r2 \"T\"", "[Ref  2]: <http://x/y z> 'q'",
+    "  [ref3]: /three", "   [ref3]: /dup (paren)", "[ref4]:", "/four",
+    "\"title line\"", "'single'", "(paren title)", "[ref3]: /a\\(b\\)c?x=1&y=2",
+    "[ref]", "[REF][]", "text [ref] more", "[x][ref]", "![alt][ref]", "![ref]",
+    "![ref][]", "[ref 2][]", "[a *b*][Ref 2]", "[ref3]", "[ref4]", "[nope]",
+    "[x][nope]", "[ref][nope]", "[ref][nope][ref3]", "[ref] [ref3]", "[ref](",
+    "> [ref4]: /q", "- [ref4]: /l", "> [ref]", "- [ref3][]", "[ref]:", "[]: /e",
+    "[ref]: /r *x*", "# [ref]", "[ref]\\", "\\[ref]", "[ref\\]",
     # Deliberately NO table fragments. GFM tables are an extension the oracle
     # does not implement, so a header line landing above a delimiter line is
     # a documented divergence, not a bug, and it would report as one here.
@@ -64,7 +82,12 @@ def mine(text):
 
 
 def ref(text):
-    return commonmark.commonmark(text).replace("'", "&#x27;")
+    # Two more places where the oracle is brought to the spec (see the module
+    # docstring): the empty `<p></p>` it leaves behind when a paragraph held
+    # nothing but definitions and a setext underline followed, and the
+    # percent-encoded backtick, which cmark's own href escaper leaves alone.
+    return (commonmark.commonmark(text).replace("'", "&#x27;")
+            .replace("<p></p>\n", "").replace("%60", "`"))
 
 
 def main():

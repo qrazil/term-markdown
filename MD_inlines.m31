@@ -13,8 +13,10 @@
 //
 // The module is named `inlines` and not `inline` because `inline` is a C
 // keyword and this compiler emits C.
+import MD_doc;
 import html;
 import text;
+import unicode;
 
 // --- character classes -------------------------------------------------------
 //
@@ -25,11 +27,14 @@ import text;
 // by Unicode category. `é` and `字` are "other" here and there; U+00A0 and
 // `»` are "other" here and whitespace/punctuation there. See README.
 
-bool is_space_byte(int character) {
+/// Is `character` one of the ASCII spaces: space, tab, line feed, carriage
+/// return, vertical tab, form feed?
+pub bool is_space_byte(int character) {
     return character == ' ' || character == '\t' || character == '\n' || character == '\r' || character == 11 || character == 12;
 }
 
-bool is_punctuation_byte(int character) {
+/// Is `character` ASCII punctuation, the characters a backslash may escape?
+pub bool is_punctuation_byte(int character) {
     if (character >= '!' && character <= '/') {
         return true;
     }
@@ -135,19 +140,22 @@ str mark_of(int character) {
 // --- the scan ----------------------------------------------------------------
 
 /// `source`, a block's raw inline source, as the HTML that goes inside its element.
-pub str render(str source) {
-    return render_at(source, 0);
+/// `references` are the document's link reference definitions, which
+/// `[text][label]`, `[text][]` and `[label]` look up; an empty map makes
+/// every one of those literal text.
+pub str render(str source, Map<str, MD_doc.Reference> references) {
+    return render_at(source, references, 0);
 }
 
 // The same, with the plain text only: every tag removed. This is what an
 // image's `alt` attribute holds, and rendering then stripping is how the
 // literal-vs-emphasis question is answered without a second parser.
-str plain(str source) {
-    return strip_tags(render_at(source, 0));
+str plain(str source, Map<str, MD_doc.Reference> references) {
+    return strip_tags(render_at(source, references, 0));
 }
 
-str render_at(str source, int depth) {
-    List<Node> nodes = scan(source, brackets(source), depth);
+str render_at(str source, Map<str, MD_doc.Reference> references, int depth) {
+    List<Node> nodes = scan(source, brackets(source), references, depth);
     emphasis(nodes);
     return emit(nodes);
 }
@@ -191,7 +199,7 @@ List<int> brackets(str source) {
     return shut;
 }
 
-List<Node> scan(str source, List<int> shut, int depth) {
+List<Node> scan(str source, List<int> shut, Map<str, MD_doc.Reference> references, int depth) {
     List<Node> nodes = [];
     int length = source.size();
     int index = 0;
@@ -245,7 +253,7 @@ List<Node> scan(str source, List<int> shut, int depth) {
             continue;
         }
         if (character == '[' || character == '!' && index + 1 < length && source.byte_at(index + 1) == '[') {
-            int after = link(nodes, source, shut, index, from, depth);
+            int after = link(nodes, source, shut, references, index, from, depth);
             if (after > index) {
                 index = after;
                 from = index;
@@ -473,7 +481,7 @@ type Target {
     int after;
 }
 
-int link(List<Node> nodes, str source, List<int> shuts, int start, int from, int depth) {
+int link(List<Node> nodes, str source, List<int> shuts, Map<str, MD_doc.Reference> references, int start, int from, int depth) {
     int bang = 0;
     if (source.byte_at(start) == '!') {
         bang = 1;
@@ -488,21 +496,35 @@ int link(List<Node> nodes, str source, List<int> shuts, int start, int from, int
         return start;
     }
     int shut = shuts[open];
-    if (shut < 0 || shut + 1 >= source.size() || source.byte_at(shut + 1) != '(') {
+    if (shut < 0) {
         return start;
     }
-    Target clause = target(source, shut + 2);
+    // An inline destination is tried first and wins; only when `](` does not
+    // begin a valid one does the bracket get a chance as a reference.
+    Target clause = Target(false, "", "", start);
+    if (shut + 1 < source.size() && source.byte_at(shut + 1) == '(') {
+        clause = target(source, shut + 2);
+    }
+    if (!clause.is_valid) {
+        clause = reference_target(source, shuts, references, open, shut);
+    }
     if (!clause.is_valid) {
         return start;
     }
-    str inner = source.substr(open + 1, shut);
     flush(nodes, source, from, start);
+    nodes.push(html_node(link_html(bang, source.substr(open + 1, shut), clause, references, depth)));
+    return clause.after;
+}
+
+// The `<a>` or `<img>` for one link whose text is `inner` and whose
+// destination and title are in `clause`.
+str link_html(int bang, str inner, Target clause, Map<str, MD_doc.Reference> references, int depth) {
     List<str> out = [];
     if (bang == 1) {
         out.push("<img src=\"");
         out.push(escape_href(clause.href));
         out.push("\" alt=\"");
-        out.push(plain(inner));
+        out.push(plain(inner, references));
         out.push("\"");
         if (clause.title.size() > 0) {
             out.push(" title=\"");
@@ -520,11 +542,116 @@ int link(List<Node> nodes, str source, List<int> shuts, int start, int from, int
             out.push("\"");
         }
         out.push(">");
-        out.push(render_at(inner, depth + 1));
+        out.push(render_at(inner, references, depth + 1));
         out.push("</a>");
     }
-    nodes.push(html_node(out.join("")));
-    return clause.after;
+    return out.join("");
+}
+
+// --- reference links ---------------------------------------------------------
+
+/// The longest label CommonMark allows, in characters between the brackets.
+/// A `\x` escape counts once, as the reference implementation counts it; here
+/// the unit is a byte, so a label of two-byte letters is cut at 500 of them.
+const int LABEL_LIMIT = 1000;
+
+/// The offset just past the `]` of the link label that starts at `start`
+/// (which must hold a `[`), or -1 if what is there is not a label: an
+/// unescaped bracket inside, no closing `]`, or more than `LABEL_LIMIT`
+/// characters.
+pub int label_end(str source, int start) {
+    int length = source.size();
+    if (start >= length || source.byte_at(start) != '[') {
+        return -1;
+    }
+    int index = start + 1;
+    int count = 0;
+    while (index < length) {
+        int character = source.byte_at(index);
+        if (character == ']') {
+            return index + 1;
+        }
+        if (character == '[') {
+            return -1;
+        }
+        if (character == '\\') {
+            if (index + 1 >= length) {
+                return -1;
+            }
+            index = index + 2;
+        } else {
+            index = index + 1;
+        }
+        count = count + 1;
+        if (count > LABEL_LIMIT) {
+            return -1;
+        }
+    }
+    return -1;
+}
+
+/// `label`, the text between a label's brackets, as the key it matches by:
+/// trimmed, every run of white space one space, and case folded (so `ẞ`
+/// and `SS` agree). "" is a label that is nothing but space, which no
+/// definition may have.
+pub str normalize_label(str label) {
+    return unicode.fold(text.split_whitespace(label).join(" "));
+}
+
+// The reference a bracket pair `source[open..shut]` stands for, as a `Target`,
+// or an invalid one. Three shapes, by what follows the `]`:
+//
+//   [text][label]   the label in the second brackets
+//   [text][]        the text is the label
+//   [label]         likewise, when no label follows
+//
+// A second pair of brackets that is a label but names nothing is not a
+// fallback to the shortcut form: `[foo][bar]` with only `foo` defined is
+// literal. The first pair doubles as the label only if it holds no brackets
+// of its own.
+Target reference_target(str source, List<int> shuts, Map<str, MD_doc.Reference> references, int open, int shut) {
+    Target none = Target(false, "", "", open);
+    if (references.size() == 0) {
+        return none;
+    }
+    int after = shut + 1;
+    int label_stop = -1;
+    if (after < source.size() && source.byte_at(after) == '[') {
+        label_stop = label_end(source, after);
+    }
+    str key = "";
+    int stop = after;
+    if (label_stop > after + 2) {
+        key = normalize_label(source.substr(after + 1, label_stop - 1));
+        stop = label_stop;
+    } else {
+        // Too long to be a label, or holding a bracket: not one. The scan is
+        // bounded by the length test first, so it costs one label's worth at
+        // most.
+        if (shut - open > LABEL_LIMIT + 1) {
+            return none;
+        }
+        for (int index in open + 1 .. shut) {
+            if (shuts[index] >= 0) {
+                return none;
+            }
+        }
+        key = normalize_label(source.substr(open + 1, shut));
+        if (label_stop == after + 2) {
+            stop = label_stop;
+        }
+    }
+    if (key.size() == 0) {
+        return none;
+    }
+    match (references.get(key)) {
+        case Some(MD_doc.Reference found): {
+            return Target(true, found.href, found.title, stop);
+        }
+        case None: {
+            return none;
+        }
+    }
 }
 
 int skip_code(str source, int start) {
@@ -635,9 +762,9 @@ int skip_whitespace(str source, int start) {
     return index;
 }
 
-// Backslash escapes resolved, for text that is about to become an attribute
-// rather than inline content.
-str unescape(str source) {
+/// Backslash escapes resolved, for text that is about to become an attribute
+/// rather than inline content.
+pub str unescape(str source) {
     if (source.index_of("\\").is_none()) {
         return source;
     }

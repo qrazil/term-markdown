@@ -1,0 +1,43 @@
+<p>A definition whose title is followed by text has no title, and the &quot;title&quot; starts a paragraph:</p>
+<p>[one]: /one &quot;not a title&quot; trailing</p>
+<p>[one]</p>
+<p>A title on the next line, then text after it, is not part of the definition:</p>
+<p>&quot;title&quot; and more</p>
+<p><a href="/two">two</a></p>
+<p>An unbalanced parenthesis in a bare destination: no definition, and [three] stays literal</p>
+<p>[three]: /a(b</p>
+<p>[three]</p>
+<p>A definition then a thematic break:</p>
+<hr />
+<p><a href="/four">four</a></p>
+<p>A definition then an equals line is a paragraph: <a href="/five">five</a></p>
+<p>===</p>
+<p><a href="/five">five</a></p>
+<p>An empty label is no definition, nor is a label of blanks:</p>
+<p>[]: /empty</p>
+<p>[ ]: /blank</p>
+<p><a href="">x</a></p>
+<p>Pointy destinations may hold spaces and are not trimmed: <a href="/a%20b" title="single">six</a></p>
+<p><a href="/a%20b" title="single">six</a></p>
+<p>A reference inside a table cell:</p>
+<table>
+<thead>
+<tr>
+<th>a</th>
+<th>b</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="/a%20b" title="single">six</a></td>
+<td><a href="/seven">seven</a></td>
+</tr>
+</tbody>
+</table>
+<p>A label with a backslash-escaped bracket: <a href="/escaped">a]b</a></p>
+<p>A label with a bracket in it that is not escaped is no definition:</p>
+<p>[a]b]: /nope</p>
+<p>[a]b]</p>
+<p>Unicode case folding: <a href="/ss">STRASSE</a> and <a href="/ss">Straße</a></p>
+<p>Many labels, one paragraph: <a href="/m">m</a> <a href="/n">n</a></p>
+<p><a href="/m">m</a> <a href="/o">o</a></p>

@@ -16,6 +16,8 @@ import text;
 type Out {
     List<str> parts;
     bool is_at_line_start;
+    // The document's link reference definitions, for the inline parser.
+    Map<str, MD_doc.Reference> references;
 }
 
 void Out.put(str chunk) {
@@ -37,14 +39,14 @@ str Out.text() {
     return parts.join("");
 }
 
-Out new_out() {
-    return Out([], true);
+Out new_out(Map<str, MD_doc.Reference> references) {
+    return Out([], true, references);
 }
 
-/// `block_list` as HTML: one line per block, cmark's layout.
-pub str document(List<MD_doc.Block> block_list) {
-    Out out = new_out();
-    blocks(out, block_list, false);
+/// `parsed` as HTML: one line per block, cmark's layout.
+pub str document(MD_doc.Document parsed) {
+    Out out = new_out(parsed.references);
+    blocks(out, parsed.blocks, false);
     return out.text();
 }
 
@@ -66,11 +68,11 @@ void block(Out out, MD_doc.Block current_block, bool is_tight) {
             // what "tight" means, and it is why the flag has to reach this
             // far down.
             if (is_tight) {
-                out.put(MD_inlines.render(raw));
+                out.put(MD_inlines.render(raw, out.references));
             } else {
                 out.ensure_newline();
                 out.put("<p>");
-                out.put(MD_inlines.render(raw));
+                out.put(MD_inlines.render(raw, out.references));
                 out.put("</p>");
                 out.ensure_newline();
             }
@@ -79,7 +81,7 @@ void block(Out out, MD_doc.Block current_block, bool is_tight) {
             str tag = str(heading.level);
             out.ensure_newline();
             out.put("<h" + tag + ">");
-            out.put(MD_inlines.render(heading.text));
+            out.put(MD_inlines.render(heading.text, out.references));
             out.put("</h" + tag + ">");
             out.ensure_newline();
         }
@@ -147,7 +149,7 @@ void table(Out out, MD_doc.Table grid) {
     out.ensure_newline();
     for (int i in 0 .. grid.heads.size()) {
         out.put("<th" + align_attribute(grid.align, i) + ">");
-        out.put(MD_inlines.render(grid.heads[i]));
+        out.put(MD_inlines.render(grid.heads[i], out.references));
         out.put("</th>");
         out.ensure_newline();
     }
@@ -163,7 +165,7 @@ void table(Out out, MD_doc.Table grid) {
             out.ensure_newline();
             for (int column in 0 .. row.size()) {
                 out.put("<td" + align_attribute(grid.align, column) + ">");
-                out.put(MD_inlines.render(row[column]));
+                out.put(MD_inlines.render(row[column], out.references));
                 out.put("</td>");
                 out.ensure_newline();
             }

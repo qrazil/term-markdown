@@ -1,0 +1,21 @@
+<h1>Reference links</h1>
+<p>A full reference, <a href="/url" title="the title">the text</a>, a collapsed one, <a href="/url" title="the title">foo</a>, and a shortcut,
+<a href="/url" title="the title">foo</a>. The label ignores case and runs of white space: <a href="/url" title="the title">FOO</a>, <a href="/url" title="the title">Foo</a>,
+<a href="my%20url" title="single &quot;quoted&quot; title">a   b</a> and <a href="my%20url" title="single &quot;quoted&quot; title">A B</a>. Whitespace inside the label counts as one space, even
+across a line break: <a href="my%20url" title="single &quot;quoted&quot; title">a
+b</a>.</p>
+<p>Images: <img src="/url" alt="the alt" title="the title" />, <img src="/url" alt="foo" title="the title" />, <img src="/url" alt="foo" title="the title" /> and <img src="my%20url" alt="an emphasised alt" title="single &quot;quoted&quot; title" />.</p>
+<p>The text may hold markup: <a href="/url" title="the title"><em>em</em> and <code>code</code></a>, and a reference link may
+sit inside emphasis: <em><a href="/url" title="the title">foo</a></em> and <strong><a href="/url" title="the title">foo</a></strong>.</p>
+<p>A definition can come after the use; so can all of them. Unmatched
+references stay literal text: [nope], [nope][], [text][nope], [foo][nope],
+![nope] and ![alt][nope]. A label is not a fallback: [foo][nope] above is
+literal even though <code>foo</code> exists. Brackets inside a shortcut label are not
+allowed, so [foo [bar]] is not one, while [<a href="/url" title="the title">foo</a>] is a link in brackets.</p>
+<p>An inline destination wins over a reference: <a href="/inline">foo</a> and
+<a href="/url" title="the title">foo</a>( not an inline link ). The reference is used when the parentheses do
+not make a link: <a href="/url" title="the title">foo</a>(bad &quot;title).</p>
+<p>Escapes: [foo] is literal, [foo] is not closed, and <code>[foo]</code> in a code span
+is code. A link text is not a label: [<code>foo</code>] and [foo<code>]</code>] are not links.</p>
+<p>First definition wins: <a href="/first">dup</a>, <a href="/first">Dup</a> and <a href="/first">DUP</a>. Others: <a href="/a(b)c?x=1&amp;y=2" title="title with &quot;escapes&quot; and &amp; &lt; &gt;">ESC</a>, <a href="/p" title="parenthesised">paren</a>,
+<a href="/three-spaces">indented</a>, <a href="/on-the-next-line" title="and its title, on the line after">next line</a>, <a href="/multi">line break in label</a>, <a href="">empty</a>, <a href="/caf%C3%A9/%E4%B8%AD%E6%96%87" title="ü">unicode</a>.</p>

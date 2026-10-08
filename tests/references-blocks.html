@@ -1,0 +1,36 @@
+<h1>Where definitions live</h1>
+<p>A definition may not interrupt a paragraph, so this is text and so is
+[not-a-def]:
+a paragraph
+[late]: /url
+[late]</p>
+<p>It begins a paragraph, though, and the rest stays one:</p>
+<p>the paragraph that is left, with <a href="/1">one</a> and <a href="/2">two</a></p>
+<blockquote>
+<p>A quote, using <a href="/in-a-quote">quoted</a> and <a href="/in-a-list">list-item</a> and <a href="/top">top</a>.</p>
+</blockquote>
+<ul>
+<li></li>
+<li>
+<p>an item using <a href="/in-a-list">list-item</a>, <a href="/in-a-quote">quoted</a> and <a href="/top">top</a></p>
+<ul>
+<li></li>
+<li>and <a href="/nested">nested</a> again</li>
+</ul>
+</li>
+</ul>
+<ol>
+<li>and <a href="/ordered">ordered</a> on the line after it</li>
+</ol>
+<h1>Heading <a href="/top">top</a></h1>
+<h2><a href="/top">top</a> in a heading</h2>
+<p>A definition does not apply to a block of code:</p>
+<pre><code>[top]: /not-a-def
+</code></pre>
+<pre><code>[top]: /nor-this
+</code></pre>
+<pre><code>[fenced-above]: /not-this-either
+</code></pre>
+<p>[fenced-above] is not defined.</p>
+<p>Four spaces make code, three do not:</p>
+<p><a href="/3">three</a></p>
