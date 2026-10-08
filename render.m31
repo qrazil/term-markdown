@@ -1,7 +1,7 @@
 // The renderer: a `doc.Block` tree to HTML.
 //
 // The line breaks follow cmark's, and they are produced the way cmark
-// produces them: every block asks for a newline with `cr()`, which writes one
+// produces them: every block asks for a newline with `ensure_newline()`, which writes one
 // only if the output does not already end in one. Getting that rule right is
 // most of what makes the output comparable with a reference implementation --
 // the tags are easy and the whitespace is not.
@@ -15,21 +15,21 @@ import text;
 // with `+` is quadratic.
 type Out {
     List<str> parts;
-    bool bol;
+    bool at_line_start;
 }
 
-void Out.put(str s) {
-    if (s.size() == 0) {
+void Out.put(str chunk) {
+    if (chunk.size() == 0) {
         return;
     }
-    parts.push(s);
-    bol = s.ends_with("\n");
+    parts.push(chunk);
+    at_line_start = chunk.ends_with("\n");
 }
 
-void Out.cr() {
-    if (!bol) {
+void Out.ensure_newline() {
+    if (!at_line_start) {
         parts.push("\n");
-        bol = true;
+        at_line_start = true;
     }
 }
 
@@ -41,153 +41,153 @@ Out new_out() {
     return Out([], true);
 }
 
-/// `bs` as HTML: one line per block, cmark's layout.
-pub str document(List<doc.Block> bs) {
-    Out o = new_out();
-    blocks(o, bs, false);
-    return o.text();
+/// `block_list` as HTML: one line per block, cmark's layout.
+pub str document(List<doc.Block> block_list) {
+    Out out = new_out();
+    blocks(out, block_list, false);
+    return out.text();
 }
 
-void blocks(Out o, List<doc.Block> bs, bool tight) {
-    for (doc.Block b in bs) {
-        block(o, b, tight);
+void blocks(Out out, List<doc.Block> block_list, bool tight) {
+    for (doc.Block current_block in block_list) {
+        block(out, current_block, tight);
     }
 }
 
-void block(Out o, doc.Block b, bool tight) {
-    match (b) {
+void block(Out out, doc.Block current_block, bool tight) {
+    match (current_block) {
         case Rule: {
-            o.cr();
-            o.put("<hr />");
-            o.cr();
+            out.ensure_newline();
+            out.put("<hr />");
+            out.ensure_newline();
         }
         case Paragraph(str raw): {
             // Inside a tight list a paragraph has no tags at all. That is
             // what "tight" means, and it is why the flag has to reach this
             // far down.
             if (tight) {
-                o.put(inlines.render(raw));
+                out.put(inlines.render(raw));
             } else {
-                o.cr();
-                o.put("<p>");
-                o.put(inlines.render(raw));
-                o.put("</p>");
-                o.cr();
+                out.ensure_newline();
+                out.put("<p>");
+                out.put(inlines.render(raw));
+                out.put("</p>");
+                out.ensure_newline();
             }
         }
-        case Heading(doc.Heading h): {
-            str tag = str(h.level);
-            o.cr();
-            o.put("<h" + tag + ">");
-            o.put(inlines.render(h.text));
-            o.put("</h" + tag + ">");
-            o.cr();
+        case Heading(doc.Heading heading): {
+            str tag = str(heading.level);
+            out.ensure_newline();
+            out.put("<h" + tag + ">");
+            out.put(inlines.render(heading.text));
+            out.put("</h" + tag + ">");
+            out.ensure_newline();
         }
-        case Fence(doc.Code c): {
-            o.cr();
-            o.put("<pre><code");
-            str lang = first_word(c.info);
-            if (lang.size() > 0) {
-                o.put(" class=\"language-" + html.escape(lang) + "\"");
+        case Fence(doc.Code code): {
+            out.ensure_newline();
+            out.put("<pre><code");
+            str language = first_word(code.info);
+            if (language.size() > 0) {
+                out.put(" class=\"language-" + html.escape(language) + "\"");
             }
-            o.put(">");
-            o.put(html.escape(c.body));
-            o.put("</code></pre>");
-            o.cr();
+            out.put(">");
+            out.put(html.escape(code.body));
+            out.put("</code></pre>");
+            out.ensure_newline();
         }
-        case Quoted(doc.Quote q): {
-            o.cr();
-            o.put("<blockquote>");
-            o.cr();
-            blocks(o, q.kids, false);
-            o.cr();
-            o.put("</blockquote>");
-            o.cr();
+        case Quoted(doc.Quote quote): {
+            out.ensure_newline();
+            out.put("<blockquote>");
+            out.ensure_newline();
+            blocks(out, quote.kids, false);
+            out.ensure_newline();
+            out.put("</blockquote>");
+            out.ensure_newline();
         }
-        case Bullets(doc.Listing l): {
-            o.cr();
-            if (l.ordered) {
-                if (l.start == 1) {
-                    o.put("<ol>");
+        case Bullets(doc.Listing listing): {
+            out.ensure_newline();
+            if (listing.ordered) {
+                if (listing.start == 1) {
+                    out.put("<ol>");
                 } else {
-                    o.put("<ol start=\"" + str(l.start) + "\">");
+                    out.put("<ol start=\"" + str(listing.start) + "\">");
                 }
             } else {
-                o.put("<ul>");
+                out.put("<ul>");
             }
-            o.cr();
-            for (doc.Item it in l.items) {
-                o.cr();
-                o.put("<li>");
-                blocks(o, it.kids, l.tight);
-                o.put("</li>");
-                o.cr();
+            out.ensure_newline();
+            for (doc.Item item in listing.items) {
+                out.ensure_newline();
+                out.put("<li>");
+                blocks(out, item.kids, listing.tight);
+                out.put("</li>");
+                out.ensure_newline();
             }
-            o.cr();
-            if (l.ordered) {
-                o.put("</ol>");
+            out.ensure_newline();
+            if (listing.ordered) {
+                out.put("</ol>");
             } else {
-                o.put("</ul>");
+                out.put("</ul>");
             }
-            o.cr();
+            out.ensure_newline();
         }
-        case Grid(doc.Table t): {
-            table(o, t);
+        case Grid(doc.Table grid): {
+            table(out, grid);
         }
     }
 }
 
-void table(Out o, doc.Table t) {
-    o.cr();
-    o.put("<table>");
-    o.cr();
-    o.put("<thead>");
-    o.cr();
-    o.put("<tr>");
-    o.cr();
-    for (int i in 0 .. t.heads.size()) {
-        o.put("<th" + align_attr(t.align, i) + ">");
-        o.put(inlines.render(t.heads[i]));
-        o.put("</th>");
-        o.cr();
+void table(Out out, doc.Table grid) {
+    out.ensure_newline();
+    out.put("<table>");
+    out.ensure_newline();
+    out.put("<thead>");
+    out.ensure_newline();
+    out.put("<tr>");
+    out.ensure_newline();
+    for (int i in 0 .. grid.heads.size()) {
+        out.put("<th" + align_attribute(grid.align, i) + ">");
+        out.put(inlines.render(grid.heads[i]));
+        out.put("</th>");
+        out.ensure_newline();
     }
-    o.put("</tr>");
-    o.cr();
-    o.put("</thead>");
-    o.cr();
-    if (t.rows.size() > 0) {
-        o.put("<tbody>");
-        o.cr();
-        for (List<str> row in t.rows) {
-            o.put("<tr>");
-            o.cr();
-            for (int k in 0 .. row.size()) {
-                o.put("<td" + align_attr(t.align, k) + ">");
-                o.put(inlines.render(row[k]));
-                o.put("</td>");
-                o.cr();
+    out.put("</tr>");
+    out.ensure_newline();
+    out.put("</thead>");
+    out.ensure_newline();
+    if (grid.rows.size() > 0) {
+        out.put("<tbody>");
+        out.ensure_newline();
+        for (List<str> row in grid.rows) {
+            out.put("<tr>");
+            out.ensure_newline();
+            for (int column in 0 .. row.size()) {
+                out.put("<td" + align_attribute(grid.align, column) + ">");
+                out.put(inlines.render(row[column]));
+                out.put("</td>");
+                out.ensure_newline();
             }
-            o.put("</tr>");
-            o.cr();
+            out.put("</tr>");
+            out.ensure_newline();
         }
-        o.put("</tbody>");
-        o.cr();
+        out.put("</tbody>");
+        out.ensure_newline();
     }
-    o.put("</table>");
-    o.cr();
+    out.put("</table>");
+    out.ensure_newline();
 }
 
-str align_attr(List<int> align, int i) {
-    if (i >= align.size()) {
+str align_attribute(List<int> align, int column) {
+    if (column >= align.size()) {
         return "";
     }
-    if (align[i] == doc.ALIGN_LEFT) {
+    if (align[column] == doc.ALIGN_LEFT) {
         return " align=\"left\"";
     }
-    if (align[i] == doc.ALIGN_CENTER) {
+    if (align[column] == doc.ALIGN_CENTER) {
         return " align=\"center\"";
     }
-    if (align[i] == doc.ALIGN_RIGHT) {
+    if (align[column] == doc.ALIGN_RIGHT) {
         return " align=\"right\"";
     }
     return "";
