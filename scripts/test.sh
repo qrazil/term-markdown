@@ -210,6 +210,147 @@ if [ -z "$filter" ] || [ "$filter" = full ]; then
     rm -rf "$W"
 fi
 
+# --- --watch: rebuilds, atomic writes, and surviving what editors do ------------
+#
+# A watcher polls every 300 ms, so nothing here is timed with a bare sleep:
+# every step waits for the thing it expects (a line in the watcher's log, the
+# process ending) in a loop that gives up after a generous bound, and the
+# watcher itself ends by `--watch-limit N` (hidden; N successful builds, the
+# first included). Files are replaced with write-then-mv, as an editor does,
+# except in the one test of an in-place edit: a plain `>` truncates first and
+# could be caught half done by a poll.
+if [ -z "$filter" ] || [ "$filter" = watch ]; then
+    D=$(mktemp -d)
+
+    # wait_for SECONDS COMMAND...: true as soon as COMMAND is, false at the bound.
+    wait_for() {
+        local tries=$(($1 * 10))
+        shift
+        while ! "$@" >/dev/null 2>&1; do
+            tries=$((tries - 1))
+            [ "$tries" -le 0 ] && return 1
+            sleep 0.1
+        done
+        return 0
+    }
+    # has_lines FILE PATTERN COUNT: FILE has at least COUNT lines matching PATTERN.
+    has_lines() { [ "$(grep -Ec -- "$2" "$1")" -ge "$3" ]; }
+    # is_alive PID, is_gone PID.
+    is_alive() { kill -0 "$1" 2>/dev/null; }
+    is_gone() { ! kill -0 "$1" 2>/dev/null; }
+    # put FILE TEXT: replace FILE by write-then-rename, as an editor's save does.
+    put() {
+        printf '%b' "$2" >"$1.new"
+        mv "$1.new" "$1"
+    }
+    inode() { ls -i "$1" | awk '{print $1}'; }
+    # finish PID: the exit status of a watcher that is expected to end by itself.
+    finish() {
+        if wait_for 20 is_gone "$1"; then
+            wait "$1"
+            return $?
+        fi
+        kill "$1" 2>/dev/null
+        wait "$1" 2>/dev/null
+        return 99
+    }
+
+    # The command line.
+    $BIN --watch "$T/headings.md" >/dev/null 2>"$D/e"
+    check "watch: no --out: exit" "2" "$?"
+    check "watch: no --out: message" "yes" "$(grep -q 'needs --out' "$D/e" && echo yes || echo no)"
+    printf 'x\n' | $BIN --watch --out "$D/never.html" >/dev/null 2>"$D/e"
+    check "watch: stdin: exit" "2" "$?"
+    check "watch: stdin: message" "yes" "$(grep -q 'not standard input' "$D/e" && echo yes || echo no)"
+    printf 'x\n' | $BIN --watch --out "$D/never.html" - >/dev/null 2>&1
+    check "watch: dash: exit" "2" "$?"
+    cp "$T/headings.md" "$D/self.md"
+    $BIN --watch --out "$D/self.md" "$D/self.md" >/dev/null 2>&1
+    check "watch: --out is the input: exit" "2" "$?"
+    check "watch: --out is the input: untouched" "yes" "$(cmp -s "$T/headings.md" "$D/self.md" && echo yes || echo no)"
+    $BIN --watch --out "$D/never.html" /nonexistent.md >/dev/null 2>"$D/e"
+    check "watch: missing input at start: exit" "1" "$?"
+    check "watch: missing input at start: no output" "no" "$([ -e "$D/never.html" ] && echo yes || echo no)"
+    $BIN --watch --watch-limit many --out "$D/never.html" "$T/headings.md" >/dev/null 2>&1
+    check "watch: bad --watch-limit: exit" "2" "$?"
+    check "watch-limit is not in --help" "0" "$($BIN --help | grep -c watch-limit)"
+
+    # The build at start, a change in place, a replacement by rename.
+    printf '# one\n' >"$D/a.md"
+    "$BIN" --watch --watch-limit 3 "$D/a.md" --out "$D/a.html" >"$D/a.log" 2>"$D/a.err" &
+    pid=$!
+    wait_for 20 has_lines "$D/a.log" 'rebuilt' 1
+    check "watch: builds at start" "<h1>one</h1>" "$(cat "$D/a.html" 2>/dev/null)"
+    check "watch: line has time and duration" "1" \
+          "$(grep -Ec '^[0-9]{2}:[0-9]{2}:[0-9]{2} rebuilt .*a\.html \([0-9]+ ms\)$' "$D/a.log")"
+    first_inode=$(inode "$D/a.html")
+    printf '# one\n\nmore\n' >>"$D/a.md"
+    wait_for 20 has_lines "$D/a.log" 'rebuilt' 2
+    check "watch: rebuilds after an edit in place" "yes" \
+          "$(grep -q '<p>more</p>' "$D/a.html" && echo yes || echo no)"
+    check "watch: output is replaced by rename" "yes" "$([ "$(inode "$D/a.html")" != "$first_inode" ] && echo yes || echo no)"
+    put "$D/a.md" '# three\n'
+    wait_for 20 has_lines "$D/a.log" 'rebuilt' 3
+    finish "$pid"
+    check "watch: --watch-limit ends it: exit 0" "0" "$?"
+    check "watch: rebuilds after replace-by-rename" "<h1>three</h1>" "$(cat "$D/a.html")"
+    check "watch: three lines for three builds" "3" "$(grep -c 'rebuilt' "$D/a.log")"
+    check "watch: quiet on stderr" "0" "$(wc -c <"$D/a.err" | tr -d ' ')"
+    check "watch: no temporary file left" "no" "$(ls "$D" | grep -q 'markdown-tmp' && echo yes || echo no)"
+
+    # Errors and absences, with --full and a --css file: a bad stylesheet, a
+    # file that is not UTF-8 and a file that vanishes are all survived, each
+    # leaves the last good page where it was, and the third good build ends it.
+    printf '# page\n' >"$D/b.md"
+    printf 'a { color: red }\n' >"$D/b.css"
+    "$BIN" --watch --watch-limit 3 --full --theme none --css "$D/b.css" "$D/b.md" --out "$D/b.html" >"$D/b.log" 2>"$D/b.err" &
+    pid=$!
+    wait_for 20 has_lines "$D/b.log" 'rebuilt' 1
+    check "watch: --full builds at start" "1" "$(grep -c 'color: red' "$D/b.html" 2>/dev/null)"
+    good=$(cat "$D/b.html")
+    put "$D/b.css" 'a { color: red }\n</style><script>x</script>\n'
+    wait_for 20 has_lines "$D/b.err" 'contains </style' 1
+    check "watch: bad --css is reported" "1" "$(grep -c 'markdown: --css .*contains </style' "$D/b.err")"
+    check "watch: bad --css: still running" "yes" "$(is_alive "$pid" && echo yes || echo no)"
+    check "watch: bad --css: old output kept" "$good" "$(cat "$D/b.html")"
+    put "$D/b.css" 'a { color: blue }\n'
+    wait_for 20 has_lines "$D/b.log" 'rebuilt' 2
+    check "watch: a --css change rebuilds" "1" "$(grep -c 'color: blue' "$D/b.html")"
+    good=$(cat "$D/b.html")
+    put "$D/b.md" '\xff\xfe\n'
+    wait_for 20 has_lines "$D/b.err" 'waiting for the next change' 2
+    check "watch: invalid UTF-8 is reported" "1" "$(grep -c 'b\.md: ' "$D/b.err")"
+    check "watch: invalid UTF-8: still running" "yes" "$(is_alive "$pid" && echo yes || echo no)"
+    check "watch: invalid UTF-8: old output kept" "$good" "$(cat "$D/b.html")"
+    rm -f "$D/b.md"
+    wait_for 20 has_lines "$D/b.err" 'is gone' 1
+    check "watch: missing input is waited for" "yes" "$(is_alive "$pid" && echo yes || echo no)"
+    check "watch: missing input: said once" "1" "$(grep -c 'is gone' "$D/b.err")"
+    check "watch: missing input: no build" "2" "$(grep -c 'rebuilt' "$D/b.log")"
+    check "watch: missing input: old output kept" "$good" "$(cat "$D/b.html")"
+    put "$D/b.md" '# back again\n'
+    wait_for 20 has_lines "$D/b.log" 'rebuilt' 3
+    finish "$pid"
+    check "watch: input back: exit 0" "0" "$?"
+    check "watch: input back: rebuilt" "1" "$(grep -c '<h1>back again</h1>' "$D/b.html")"
+    check "watch: input back: new title" "1" "$(grep -c '<title>back again</title>' "$D/b.html")"
+
+    # A first build that fails is not the end: the watcher waits for a fix.
+    printf '# c\n' >"$D/c.md"
+    "$BIN" --watch --watch-limit 1 --full --theme none --css "$D/c.css" "$D/c.md" --out "$D/c.html" >"$D/c.log" 2>"$D/c.err" &
+    pid=$!
+    wait_for 20 has_lines "$D/c.err" 'waiting for the next change' 1
+    check "watch: first build fails: reported" "1" "$(grep -c -- '--css .*c\.css' "$D/c.err")"
+    check "watch: first build fails: still running" "yes" "$(is_alive "$pid" && echo yes || echo no)"
+    check "watch: first build fails: no output" "no" "$([ -e "$D/c.html" ] && echo yes || echo no)"
+    put "$D/c.css" 'b { margin: 0 }\n'
+    finish "$pid"
+    check "watch: first build fixed: exit 0" "0" "$?"
+    check "watch: first build fixed: output" "1" "$(grep -c 'margin: 0' "$D/c.html")"
+
+    rm -rf "$D"
+fi
+
 # --- differential fuzz, when the oracle is installed -------------------------
 if [ -z "$filter" ] && python3 -c "import commonmark" 2>/dev/null; then
     for seed in 1 2 3 4; do

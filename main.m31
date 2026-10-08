@@ -5,6 +5,7 @@
 //   markdown --full --theme bulma f.md   ... styled by Bulma (a CDN link)
 //   markdown --full --css site.css f.md  ... plus a stylesheet of your own
 //   markdown --out page.html f.md    write there instead of standard output
+//   markdown --watch f.md --out page.html   rebuild whenever f.md changes
 //   markdown                         reads standard input
 //
 // Two dashes: `lib/args` reads one dash as a command word, so the short form
@@ -12,13 +13,11 @@
 //
 // See README.md for what of CommonMark is in, what is out, and why.
 import args;
-import MD_blocks;
-import MD_doc;
 import io;
 import os;
-import MD_render;
+import MD_build;
 import MD_theme;
-import MD_title;
+import MD_watch;
 
 // Standard input, whole. `io.read_line_of` would do it a line at a time and
 // this program needs all of it anyway.
@@ -48,35 +47,30 @@ int fail(str why) {
     return 1;
 }
 
-// The extra stylesheet for `--css`, as the page wants it: (a URL to link,
-// CSS text to inline). One of them is "" and so, with no `--css`, is the other.
-Result<List<str>, str> extra_css(str reference) {
-    if (reference.size() == 0) {
-        return Result<List<str>, str>.Ok(["", ""]);
-    }
-    if (MD_theme.is_url(reference)) {
-        return Result<List<str>, str>.Ok([reference, ""]);
-    }
-    match (io.read(reference)) {
-        case Ok(str css): {
-            if (!MD_theme.can_inline(css)) {
-                return Result<List<str>, str>.Err("--css " + reference + ": contains </style, which would end the <style> element it is inlined in");
-            }
-            return Result<List<str>, str>.Ok(["", css]);
-        }
-        case Err(io.Error error): {
-            return Result<List<str>, str>.Err("--css " + reference + ": " + error.to_str());
-        }
-    }
-}
-
-int run(args.Parsed options) {
+int run(args.Parsed options, int watch_limit) {
     str theme = options.value("theme").or("default");
     if (!MD_theme.is_theme(theme)) {
         io.eprint("markdown: --theme " + theme + ": expected " + MD_theme.THEME_NAMES);
         return 2;
     }
     str input = options.optional("file");
+    str out_path = options.value("out").or("");
+    MD_build.Job job = MD_build.Job(input, options.flag("full"), options.value("title").or(""), theme, options.value("css").or(""));
+    if (options.flag("watch")) {
+        if (out_path.size() == 0) {
+            io.eprint("markdown: --watch needs --out PATH: the page is rewritten there on every change");
+            return 2;
+        }
+        if (input.size() == 0 || input == "-") {
+            io.eprint("markdown: --watch needs a file to watch, not standard input");
+            return 2;
+        }
+        if (out_path == input) {
+            io.eprint("markdown: --watch: --out is the file being watched; it would overwrite its own source");
+            return 2;
+        }
+        return MD_watch.run(job, out_path, watch_limit);
+    }
     str source = "";
     if (input.size() == 0 || input == "-") {
         match (read_stdin()) {
@@ -97,23 +91,16 @@ int run(args.Parsed options) {
             }
         }
     }
-    MD_doc.Document tree = MD_blocks.parse(source);
-    str body = MD_render.document(tree);
-    if (options.flag("full")) {
-        str title = options.value("title").or("");
-        if (title.size() == 0) {
-            title = MD_title.default_title(tree, input);
+    str body = "";
+    match (MD_build.convert(job, source)) {
+        case Ok(str output): {
+            body = output;
         }
-        match (extra_css(options.value("css").or(""))) {
-            case Ok(List<str> extra): {
-                body = MD_theme.page(body, title, theme, extra[0], extra[1]);
-            }
-            case Err(str why): {
-                return fail(why);
-            }
+        case Err(str why): {
+            return fail(why);
         }
     }
-    match (emit(body, options.value("out").or(""))) {
+    match (emit(body, out_path)) {
         case Ok(int written): {
             if (written != body.size()) {
                 return fail("short write: " + str(written) + " of " + str(body.size()) + " bytes");
@@ -132,9 +119,56 @@ parser.value("title", placeholder: "TEXT", help: "the <title> of a --full docume
 parser.value("theme", placeholder: "NAME", default: "default", help: "--full styling: default (built in, works offline), bulma (Bulma 1.x from a CDN) or none");
 parser.value("css", placeholder: "URL|PATH", help: "--full extra stylesheet: an http(s) URL is linked, a file is inlined; comes after the theme");
 parser.value("out", short: "o", placeholder: "PATH", help: "write here instead of standard output");
+parser.flag("watch", help: "render, then render again whenever the file (or a --css file) changes; needs --out and a file; refresh the browser yourself");
 parser.optional("file", "-", help: "the markdown to read; - or nothing is standard input");
+
+// `--watch-limit N`: stop after N successful builds, the first included. It is
+// for the tests, which need a watcher that ends, and is taken out of the
+// arguments here so that `--help` does not list it. Returns the limit, 0 for
+// none, and -1 if what follows it is not a whole number of at least 0.
+int take_watch_limit(List<str> arguments) {
+    int limit = 0;
+    int index = 0;
+    while (index < arguments.size()) {
+        str word = arguments[index];
+        str given = "";
+        int taken = 0;
+        if (word == "--watch-limit" && index + 1 < arguments.size()) {
+            given = arguments[index + 1];
+            taken = 2;
+        } else if (word.starts_with("--watch-limit=")) {
+            given = word.substr(14, word.size());
+            taken = 1;
+        }
+        if (taken == 0) {
+            index = index + 1;
+            continue;
+        }
+        match (given.parse_int()) {
+            case Some(int count): {
+                limit = count;
+            }
+            case None: {
+                limit = -1;
+            }
+        }
+        if (limit < 0) {
+            return -1;
+        }
+        for (int skip in 0 .. taken) {
+            arguments.remove_at(index);
+        }
+    }
+    return limit;
+}
+
 List<str> arguments = os.args();
 arguments.remove_at(0);
+int watch_limit = take_watch_limit(arguments);
+if (watch_limit < 0) {
+    io.eprint("markdown: --watch-limit: expected a whole number, 0 or more");
+    os.exit(2);
+}
 match (parser.parse(arguments)) {
     case Err(args.UsageError error): {
         io.eprint("markdown: " + error.to_str());
@@ -147,7 +181,7 @@ match (parser.parse(arguments)) {
                 print(help_text);
             }
             case None: {
-                int code = run(parsed);
+                int code = run(parsed, watch_limit);
                 if (code != 0) {
                     os.exit(code);
                 }

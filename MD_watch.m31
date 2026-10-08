@@ -1,0 +1,161 @@
+// `--watch`: render once, then render again whenever the input (or a local
+// `--css` file) changes, until the process is killed.
+//
+// How a change is noticed: every POLL_MS the input is `stat`ed and its size
+// and modification time (nanoseconds) compared with the last look. Size is
+// there because some file systems stamp a write with a coarse clock; two
+// different edits in one tick still differ in length almost always. The
+// stamp is taken BEFORE the file is read, so a write that lands while a
+// build is running is seen on the next look and built again, never lost.
+//
+// What it survives, because an editor does all of these to a file in the
+// course of an ordinary save:
+//   - the input missing for a moment (save by rename: the old name is
+//     unlinked, the new file moved in): no build is attempted until it is
+//     back, and its return, whatever it holds, is a change;
+//   - a build that fails (unreadable input, bad `--css`): the error is
+//     printed and the OLD output stays where it is, so a browser pointed at
+//     it keeps showing the last good page; the next change is tried afresh.
+//
+// What it does not do: inject a reload script, or tell the browser anything.
+// The output is a plain file; refresh the page. Writing is atomic -- a
+// temporary file in the output's own directory, then `fs.rename` over it --
+// so a refresh never lands on half a file.
+import date;
+import fs;
+import io;
+import timer;
+import MD_build;
+
+// How often the files are looked at. Short enough to feel instant after a
+// save, long enough that an idle watcher costs nothing.
+const int POLL_MS = 300;
+
+// One file's stamp: "size:mtime_ns", or "-" for a file that is not there.
+str stamp_of(str path) {
+    match (fs.stat(path)) {
+        case Ok(fs.Stat info): {
+            return str(info.size) + ":" + str(info.mtime_ns);
+        }
+        case Err(_): {
+            return "-";
+        }
+    }
+}
+
+// The wall clock as `12:34:56` (UTC), for the front of each line.
+str clock() {
+    return date.iso(date.now()).substr(11, 19);
+}
+
+// A line on standard output, flushed at once (`print` would hold it back
+// while the output is a pipe or a file, and a watcher is read live).
+void say(str line) {
+    io.File output = io.stdout();
+    Result<int, io.Error> wrote = output.write((clock() + " " + line + "\n").to_bytes());
+}
+
+void complain(str line) {
+    io.eprint(clock() + " markdown: " + line);
+}
+
+// `text` into `path` as one step: written beside it, then renamed over it.
+Result<bool, str> write_atomic(str path, str text) {
+    str temp = path + ".markdown-tmp";
+    match (io.write(temp, text)) {
+        case Ok(int written): {
+            if (written != text.size()) {
+                Result<bool, io.Error> gone = fs.remove(temp);
+                return Result<bool, str>.Err("short write: " + str(written) + " of " + str(text.size()) + " bytes");
+            }
+        }
+        case Err(io.Error error): {
+            Result<bool, io.Error> gone = fs.remove(temp);
+            return Result<bool, str>.Err("writing " + temp + ": " + error.to_str());
+        }
+    }
+    match (fs.rename(temp, path)) {
+        case Ok: {
+            return Result<bool, str>.Ok(true);
+        }
+        case Err(io.Error error): {
+            Result<bool, io.Error> gone = fs.remove(temp);
+            return Result<bool, str>.Err("renaming " + temp + " to " + path + ": " + error.to_str());
+        }
+    }
+}
+
+// Read, convert, write. Whether it worked; if not, the reason has been said.
+bool did_rebuild(MD_build.Job job, str out_path) {
+    int started = date.now_ns();
+    str failure = "";
+    match (io.read(job.input)) {
+        case Ok(str source): {
+            match (MD_build.convert(job, source)) {
+                case Ok(str page): {
+                    match (write_atomic(out_path, page)) {
+                        case Ok: {
+                            int millis = (date.now_ns() - started) / 1000000;
+                            say("rebuilt " + out_path + " (" + str(millis) + " ms)");
+                            return true;
+                        }
+                        case Err(str why): {
+                            failure = why;
+                        }
+                    }
+                }
+                case Err(str why): {
+                    failure = why;
+                }
+            }
+        }
+        case Err(io.Error error): {
+            failure = job.input + ": " + error.to_str();
+        }
+    }
+    complain(failure + " -- waiting for the next change");
+    return false;
+}
+
+/// Watch `job.input` and write the result to `out_path`. Returns only when
+/// `limit` (> 0) builds have worked, with 0; a limit of 0 is for ever. An
+/// input that is not there to begin with is a mistake in the command line
+/// and is 1; one that goes away later is waited for.
+pub int run(MD_build.Job job, str out_path, int limit) {
+    if (!fs.exists(job.input)) {
+        complain(job.input + ": no such file");
+        return 1;
+    }
+    str css_path = "";
+    if (job.has_css_file()) {
+        css_path = job.css;
+    }
+    say("watching " + job.input + " -> " + out_path + " (every " + str(POLL_MS) + " ms; Ctrl-C to stop)");
+    int built = 0;
+    bool was_missing = false;
+    // No stamp is empty, so the first look always differs: that is the
+    // build at start-up.
+    str seen = "";
+    while (true) {
+        str input_stamp = stamp_of(job.input);
+        str current = input_stamp + " " + stamp_of(css_path);
+        if (current != seen) {
+            seen = current;
+            if (input_stamp == "-") {
+                if (!was_missing) {
+                    complain(job.input + " is gone -- waiting for it to come back");
+                }
+                was_missing = true;
+            } else {
+                was_missing = false;
+                if (did_rebuild(job, out_path)) {
+                    built = built + 1;
+                    if (limit > 0 && built >= limit) {
+                        return 0;
+                    }
+                }
+            }
+        }
+        timer.sleep_ms(POLL_MS);
+    }
+}

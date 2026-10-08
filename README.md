@@ -1,7 +1,7 @@
 # `markdown` — a CommonMark subset to HTML
 
-The first real application written in this language. About 2 600 lines across
-eight modules, no Rust, no C, and nothing in `lib/` changed to make it fit.
+The first real application written in this language. About 2 900 lines across
+ten modules, no Rust, no C, and nothing in `lib/` changed to make it fit.
 `docs/FRICTION.md` is the other half of the exercise: what the
 language made awkward, what the standard library did not have, and what it
 did better than the alternatives.
@@ -9,10 +9,14 @@ did better than the alternatives.
     M31_ROOT=/path/to/m31 LANGC=/path/to/m31c bash scripts/build.sh   # ./markdown
     M31_ROOT=/path/to/m31 LANGC=/path/to/m31c bash scripts/test.sh    # the tests
 
+Building needs m31 0.3.2 or newer: `--watch` waits with `timer.sleep_ms`, which
+the standard library gained in that release.
+
     markdown README.md                       the HTML fragment, on stdout
     markdown --full --title T in.md --out f  a whole document, to a file
     markdown --full --theme bulma in.md      the same, styled by Bulma
     markdown --full --css site.css in.md     the same, plus your own CSS
+    markdown --watch in.md --out out.html    rebuild out.html whenever in.md changes
     markdown                                 reads standard input
     markdown --help
 
@@ -68,6 +72,46 @@ file that cannot be read or is not UTF-8 stops the program with a message
 and exit 1, before anything is written. URLs are escaped for the attribute
 they sit in.
 
+## `--watch`: rebuild when the file changes
+
+    markdown --watch in.md --out out.html
+    markdown --watch --full --css site.css in.md --out out.html
+
+Renders once at once, then again each time `in.md` — or the `--css` file, when
+it is a local file — changes, until you stop it with Ctrl-C. Every rebuild is
+one line on standard output, with the time (UTC) and how long it took:
+
+    14:03:11 watching in.md -> out.html (every 300 ms; Ctrl-C to stop)
+    14:03:11 rebuilt out.html (12 ms)
+    14:03:40 rebuilt out.html (3 ms)
+
+**The browser needs a manual refresh** (or a reload extension). The page gets
+no script injected and nothing is served: this is deliberately the simplest
+thing that works, a file that is kept up to date. Open `out.html` with
+`file://` and press F5.
+
+How it behaves, because editors do odd things to files:
+
+- It looks at the file's size and modification time every 300 ms. A change is
+  anything that alters either, so editing in place, saving by writing a new
+  file and renaming it over the old one, and `touch` plus an edit all count.
+- The output is written to a temporary file next to `out.html` and renamed
+  over it, so a refresh never catches half a page.
+- A build that fails — a `--css` file that is gone, not UTF-8 or carrying
+  `</style`, an input that is not UTF-8 — prints the reason on standard error
+  and leaves the last good `out.html` alone. The next change is tried afresh.
+  This holds for the first build too: the watcher waits for you to fix it.
+- The input going away for a moment (the gap in a save-by-rename) is waited
+  out: it says so once, builds nothing, and builds when the file is back.
+  An input that does not exist when you start is a typo, and exits 1.
+- `--watch` needs `--out` and a file to watch, not standard input, and `--out`
+  may not be the file being watched; each is a message and exit 2.
+- There is no signal handler, so Ctrl-C ends it at once. If that lands in the
+  middle of a write, a stray `out.html.markdown-tmp` stays behind; delete it.
+
+`--watch-limit N` (not in `--help`) makes it exit 0 after N successful builds,
+the first included. The tests use it to have a watcher that ends.
+
 ## The shape of it
 
 | | |
@@ -76,6 +120,8 @@ they sit in.
 | `MD_blocks.m31` | the block parser: source to a list of `MD_doc.Block` |
 | `MD_inlines.m31` | the inline parser: one block's raw text to HTML, given the document's references |
 | `MD_render.m31` | the tree to HTML, with cmark's whitespace |
+| `MD_build.m31` | one conversion, text in and text out, with `--full`'s page and `--css`; `main` and `--watch` both call it |
+| `MD_watch.m31` | `--watch`: the polling loop, the atomic write, what to do when a build fails or the input vanishes |
 | `MD_theme.m31` | the `--full` page: the embedded stylesheet, the three themes, the head and body |
 | `MD_title.m31` | the default `<title>`: first heading, else file stem, else `Document` |
 | `MD_refs.m31` | link reference definitions: one definition parsed off the front of a paragraph |
@@ -179,7 +225,7 @@ executable version of this list.
 
 ## How it is tested
 
-`bash scripts/test.sh` does six things.
+`bash scripts/test.sh` does seven things.
 
 1. **The corpus.** `tests/*.md` through the program, diffed against
    `tests/*.html`. Twenty-six cases, chosen for the awkward parts:
@@ -208,7 +254,16 @@ executable version of this list.
    fragment is unchanged by the page options. These goldens are written by the
    program and reviewed by eye, not derived from the oracle: regenerate after
    a deliberate change with `UPDATE_GOLDEN=1 bash scripts/test.sh full`.
-6. **Pathological inputs and speed.** 20 000 nested block quotes, 400 nested
+6. **`--watch`.** Forty checks: the usage errors (exit 2), a missing input at
+   start (exit 1), the build at start, a rebuild after an edit in place and
+   after a replace-by-rename, that the output is replaced by a rename (its
+   inode changes) and no temporary file is left, and survival of a bad `--css`
+   file, an input that is not UTF-8, an input that disappears and comes back,
+   and a first build that fails — each leaving the last good page untouched.
+   Nothing is timed with a bare `sleep`: each step waits for the line it
+   expects in the watcher's log, in a loop with a 20-second bound, and the
+   watcher ends itself with `--watch-limit`.
+7. **Pathological inputs and speed.** 20 000 nested block quotes, 400 nested
    list items, 20 000 emphasis runs in one paragraph, a 2 MB single line,
    50 000 unmatched backticks, 50 000 unmatched `[`, 20 000 unmatched `![`, 20 000 definitions (in one
    paragraph, in separate ones, and all with one label), tens of thousands of
