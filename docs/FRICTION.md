@@ -88,7 +88,7 @@ which is nothing but cursors — it is the most-repeated line by a wide margin.
 
 Worse than the noise is the *hazard*: because the increment is the last
 statement of the body rather than part of the loop header, **every `continue`
-has to re-do it by hand**. `scan()` in `inlines.m31` has eleven `continue`s and
+has to re-do it by hand**. `scan()` in `MD_inlines.m31` has eleven `continue`s and
 each one is preceded by an explicit assignment to `i`; getting one wrong is an
 infinite loop, not a compile error. A three-clause `for` makes that class of
 bug impossible. I did not ship one, but only because I was watching for it.
@@ -159,7 +159,7 @@ expression, no `or_else`, no `map`. §3.7a says "There is no `unwrap`" and
 gives a good reason; the consequence is that `Option` is excellent as a value
 you immediately propagate and expensive as a value you immediately test.
 
-The same thing happened again with `Target` in `inlines.m31` (`bool ok` plus
+The same thing happened again with `Target` in `MD_inlines.m31` (`bool ok` plus
 four fields) — a link destination clause that may or may not parse.
 
 Two small things would fix most of it without reintroducing `unwrap`: a
@@ -249,7 +249,7 @@ omits; a `text.Builder`, or a note saying "the accumulator is
 
 ### 1.8 No mutable or lazily-initialised module state, and `const` cannot call anything
 
-`href_safe(c)` asks whether a byte may appear unencoded in a URL. The right
+`is_href_safe(c)` asks whether a byte may appear unencoded in a URL. The right
 data structure is a 128-entry lookup table. I cannot build one:
 
 - a module `const` is computed by the compiler from a *constant expression*
@@ -267,7 +267,7 @@ left performance on the floor:
 ```c
 const str HREF_SAFE = "!#$%&'()*+,-./:;=?@_~`";
 
-bool href_safe(int c) {
+bool is_href_safe(int c) {
     if (alnum_byte(c)) { return true; }
     return HREF_SAFE.index_of(str.from_chars([c])).is_some();
 }
@@ -338,10 +338,10 @@ is not a rule.)
 ### 1.12 Smaller things
 
 - **`match` arms need a brace block even for one expression**, so a
-  three-variant dispatch is eleven lines. Fine in `render.m31`, heavy in a
+  three-variant dispatch is eleven lines. Fine in `MD_render.m31`, heavy in a
   predicate.
 - **`break` only leaves the innermost loop and there are no labels.** I used
-  `bool done` / `bool ended` sentinels in five places where a labelled break
+  `bool is_done` / `bool is_ended` sentinels in five places where a labelled break
   would have been clearer. This is a known and stated omission (§9); it is
   still the thing I reached for.
 - **`for` iterates `Array`, `List` and `bytes` only** — not a `Map`, and not
@@ -485,7 +485,7 @@ and a half seconds, and a megabyte of them would have taken half an hour. It
 is a denial of service in anything that converts untrusted markdown. Nothing
 found it: not the corpus, not the fuzzer, not the 1 MB timing, which uses
 well-formed input. I found it by sitting down and writing seven adversarial
-inputs on purpose, which is now a step in `scripts/test.sh`. The fix (`inlines.brackets`,
+inputs on purpose, which is now a step in `scripts/test.sh`. The fix (`MD_inlines.brackets`,
 one stack pass instead of a search per bracket) took it to 7 ms.
 
 The language cannot be blamed for a bad algorithm. But "the program is
@@ -502,7 +502,7 @@ program's own test suite say "this function took longer than it should".
 These are not consolation prizes; each of them saved real work.
 
 **Exhaustive `match` caught the change it exists to catch.** I added the
-`Grid` variant to `doc.Block` for tables after `render.m31` was written. The
+`Grid` variant to `MD_doc.Block` for tables after `MD_render.m31` was written. The
 compiler pointed at the one `match` that had to learn about it. In Go or
 Python that is a silent fall-through to the default case and a missing
 `<table>` in production.
@@ -528,12 +528,12 @@ family sequence, a flag) passed the first time, and I wrote no encoding code.
 
 **Modules are files, and that is all there is to it.** Five modules, `import`
 by basename, forward references everywhere, no headers, no ordering, no build
-file, no `mod.rs`. `doc.m31` exists only so `blocks` and `render` need not
+file, no `mod.rs`. `MD_doc.m31` exists only so `MD_blocks` and `MD_render` need not
 import each other, and making it took thirty seconds.
 
-**Privacy by default.** `doc.m31` exports six types, four constants and an
+**Privacy by default.** `MD_doc.m31` exports six types, four constants and an
 enum; everything
-in `blocks.m31` except `parse` is private; I never wrote `pub` by accident
+in `MD_blocks.m31` except `parse` is private; I never wrote `pub` by accident
 and never had to audit what I had exported.
 
 **Trapping arithmetic and bounds checks, by default, with no opt-out.** This

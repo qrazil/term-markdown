@@ -25,11 +25,11 @@ import text;
 // by Unicode category. `é` and `字` are "other" here and there; U+00A0 and
 // `»` are "other" here and whitespace/punctuation there. See README.
 
-bool space_byte(int character) {
+bool is_space_byte(int character) {
     return character == ' ' || character == '\t' || character == '\n' || character == '\r' || character == 11 || character == 12;
 }
 
-bool punctuation_byte(int character) {
+bool is_punctuation_byte(int character) {
     if (character >= '!' && character <= '/') {
         return true;
     }
@@ -42,16 +42,16 @@ bool punctuation_byte(int character) {
     return character >= '{' && character <= '~';
 }
 
-bool alphabetic_byte(int character) {
+bool is_alphabetic_byte(int character) {
     return (character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z');
 }
 
-bool digit_byte(int character) {
+bool is_digit_byte(int character) {
     return character >= '0' && character <= '9';
 }
 
-bool alphanumeric_byte(int character) {
-    return alphabetic_byte(character) || digit_byte(character);
+bool is_alphanumeric_byte(int character) {
+    return is_alphabetic_byte(character) || is_digit_byte(character);
 }
 
 // --- URL escaping ------------------------------------------------------------
@@ -64,8 +64,8 @@ bool alphanumeric_byte(int character) {
 const str HREF_SAFE = "!#$%&'()*+,-./:;=?@_~`";
 const str HEX = "0123456789ABCDEF";
 
-bool href_safe(int character) {
-    if (alphanumeric_byte(character)) {
+bool is_href_safe(int character) {
+    if (is_alphanumeric_byte(character)) {
         return true;
     }
     return HREF_SAFE.index_of(str.from_chars([character])).is_some();
@@ -81,7 +81,7 @@ str escape_href(str destination) {
             out.push("&amp;");
         } else if (character == '\'') {
             out.push("&#x27;");
-        } else if (href_safe(character)) {
+        } else if (is_href_safe(character)) {
             out.push(destination.substr(i, i + 1));
         } else {
             out.push("%");
@@ -94,25 +94,25 @@ str escape_href(str destination) {
 
 // --- nodes -------------------------------------------------------------------
 
-// Either finished HTML (`delimiter` false, `out` is it) or an unresolved run of
+// Either finished HTML (`is_delimiter` false, `out` is it) or an unresolved run of
 // `*` or `_`. `original` is how many were written, `count` how many are still
 // unpaired; `open_tags` grows leftwards and `close_tags` rightwards as the
 // second pass hangs tags on the run, which is the order that makes
 // `***x***` come out `<em><strong>x</strong></em>`.
 type Node {
-    bool delimiter;
+    bool is_delimiter;
     str out;
     int character;
     int original;
     int count;
     // What the flanking rules said when the run was scanned. These never
     // change: the rule of three asks what a run IS, not what is left of it.
-    bool opener;
-    bool closer;
+    bool can_open;
+    bool can_close;
     // Off the delimiter stack. A dead run is no longer a candidate for
     // pairing, but its unspent characters are still printed -- which is what
     // "unlinking the delimiter but not the text node" means in cmark.
-    bool dead;
+    bool is_dead;
     str open_tags;
     str close_tags;
 }
@@ -121,8 +121,8 @@ Node html_node(str markup) {
     return Node(false, markup, 0, 0, 0, false, false, false, "", "");
 }
 
-Node delimiter_node(int character, int length, bool opens, bool closes) {
-    return Node(true, "", character, length, length, opens, closes, false, "", "");
+Node delimiter_node(int character, int length, bool can_open, bool can_close) {
+    return Node(true, "", character, length, length, can_open, can_close, false, "", "");
 }
 
 str mark_of(int character) {
@@ -208,7 +208,7 @@ List<Node> scan(str source, List<int> shut, int depth) {
                 from = index;
                 continue;
             }
-            if (index + 1 < length && punctuation_byte(source.byte_at(index + 1))) {
+            if (index + 1 < length && is_punctuation_byte(source.byte_at(index + 1))) {
                 flush(nodes, source, from, index);
                 nodes.push(html_node(html.escape(source.substr(index + 1, index + 2))));
                 index = index + 2;
@@ -315,16 +315,16 @@ Node run_at(str source, int start, int stop, int character) {
     if (stop < source.size()) {
         after = source.byte_at(stop);
     }
-    bool before_space = space_byte(before);
-    bool before_punctuation = punctuation_byte(before);
-    bool after_space = space_byte(after);
-    bool after_punctuation = punctuation_byte(after);
-    bool left = !after_space && (!after_punctuation || before_space || before_punctuation);
-    bool right = !before_space && (!before_punctuation || after_space || after_punctuation);
+    bool is_space_before = is_space_byte(before);
+    bool is_punctuation_before = is_punctuation_byte(before);
+    bool is_space_after = is_space_byte(after);
+    bool is_punctuation_after = is_punctuation_byte(after);
+    bool is_left_flanking = !is_space_after && (!is_punctuation_after || is_space_before || is_punctuation_before);
+    bool is_right_flanking = !is_space_before && (!is_punctuation_before || is_space_after || is_punctuation_after);
     if (character == '_') {
-        return delimiter_node(character, stop - start, left && (!right || before_punctuation), right && (!left || after_punctuation));
+        return delimiter_node(character, stop - start, is_left_flanking && (!is_right_flanking || is_punctuation_before), is_right_flanking && (!is_left_flanking || is_punctuation_after));
     }
-    return delimiter_node(character, stop - start, left, right);
+    return delimiter_node(character, stop - start, is_left_flanking, is_right_flanking);
 }
 
 // --- code spans --------------------------------------------------------------
@@ -377,7 +377,7 @@ int autolink(List<Node> nodes, str source, int start, int from) {
         if (character == '>') {
             break;
         }
-        if (character == '<' || space_byte(character)) {
+        if (character == '<' || is_space_byte(character)) {
             return start;
         }
         stop = stop + 1;
@@ -404,7 +404,7 @@ int autolink(List<Node> nodes, str source, int start, int from) {
 // are already gone.
 bool is_uri(str body) {
     int length = body.size();
-    if (length == 0 || !alphabetic_byte(body.byte_at(0))) {
+    if (length == 0 || !is_alphabetic_byte(body.byte_at(0))) {
         return false;
     }
     for (int i in 1 .. length) {
@@ -412,7 +412,7 @@ bool is_uri(str body) {
         if (character == ':') {
             return i >= 2 && i <= 32;
         }
-        if (!alphanumeric_byte(character) && character != '+' && character != '-' && character != '.') {
+        if (!is_alphanumeric_byte(character) && character != '+' && character != '-' && character != '.') {
             return false;
         }
     }
@@ -431,30 +431,30 @@ bool is_email(str body) {
             }
             for (int i in 0 .. at_index) {
                 int character = body.byte_at(i);
-                if (!alphanumeric_byte(character) && MAIL_LOCAL.index_of(str.from_chars([character])).is_none()) {
+                if (!is_alphanumeric_byte(character) && MAIL_LOCAL.index_of(str.from_chars([character])).is_none()) {
                     return false;
                 }
             }
-            return labels_ok(body.substr(at_index + 1, body.size()));
+            return has_valid_labels(body.substr(at_index + 1, body.size()));
         }
     }
 }
 
 const str MAIL_LOCAL = ".!#$%&'*+/=?^_`{|}~-";
 
-bool labels_ok(str host) {
+bool has_valid_labels(str host) {
     for (str label in host.split(".")) {
         int length = label.size();
         if (length == 0 || length > 63) {
             return false;
         }
-        if (!alphanumeric_byte(label.byte_at(0)) || !alphanumeric_byte(label.byte_at(length - 1))) {
+        if (!is_alphanumeric_byte(label.byte_at(0)) || !is_alphanumeric_byte(label.byte_at(length - 1))) {
             return false;
         }
         int index = 1;
         while (index < length - 1) {
             int character = label.byte_at(index);
-            if (!alphanumeric_byte(character) && character != '-') {
+            if (!is_alphanumeric_byte(character) && character != '-') {
                 return false;
             }
             index = index + 1;
@@ -467,7 +467,7 @@ bool labels_ok(str host) {
 
 // What a `(dest "title")` clause came to.
 type Target {
-    bool valid;
+    bool is_valid;
     str href;
     str title;
     int after;
@@ -492,7 +492,7 @@ int link(List<Node> nodes, str source, List<int> shuts, int start, int from, int
         return start;
     }
     Target clause = target(source, shut + 2);
-    if (!clause.valid) {
+    if (!clause.is_valid) {
         return start;
     }
     str inner = source.substr(open + 1, shut);
@@ -579,7 +579,7 @@ Target target(str source, int start) {
                 stop = stop + 2;
                 continue;
             }
-            if (space_byte(character)) {
+            if (is_space_byte(character)) {
                 break;
             }
             if (character == '(') {
@@ -629,7 +629,7 @@ Target target(str source, int start) {
 int skip_whitespace(str source, int start) {
     int length = source.size();
     int index = start;
-    while (index < length && space_byte(source.byte_at(index))) {
+    while (index < length && is_space_byte(source.byte_at(index))) {
         index = index + 1;
     }
     return index;
@@ -646,7 +646,7 @@ str unescape(str source) {
     int index = 0;
     int from = 0;
     while (index < length) {
-        if (source.byte_at(index) == '\\' && index + 1 < length && punctuation_byte(source.byte_at(index + 1))) {
+        if (source.byte_at(index) == '\\' && index + 1 < length && is_punctuation_byte(source.byte_at(index + 1))) {
             out.push(source.substr(from, index));
             index = index + 1;
             from = index;
@@ -693,7 +693,7 @@ str strip_tags(str source) {
 //   * `bottom` is raised when a closer finds nothing -- but ONLY if the last
 //     candidate it looked at was not refused by the rule of three, because a
 //     `**` that fails to match an earlier `*` may still become an opener;
-//   * `odd` therefore leaks out of the search loop carrying the LAST
+//   * `is_odd_match` therefore leaks out of the search loop carrying the LAST
 //     candidate's verdict, which is what makes `_c` on the line above change
 //     whether `**a*b**` is strong. That is not a typo here; it is what the
 //     reference implementation does, and matching it is the point.
@@ -703,7 +703,7 @@ str strip_tags(str source) {
 void emphasis(List<Node> nodes) {
     List<int> delimiters = [];
     for (int i in 0 .. nodes.size()) {
-        if (nodes[i].delimiter) {
+        if (nodes[i].is_delimiter) {
             delimiters.push(i);
         }
     }
@@ -713,7 +713,7 @@ void emphasis(List<Node> nodes) {
     int closer_slot = 0;
     while (closer_slot < delimiters.size()) {
         Node closing_node = nodes[delimiters[closer_slot]];
-        if (closing_node.dead || !closing_node.closer) {
+        if (closing_node.is_dead || !closing_node.can_close) {
             closer_slot = closer_slot + 1;
             continue;
         }
@@ -724,10 +724,10 @@ void emphasis(List<Node> nodes) {
         int previous = alive_before(nodes, delimiters, closer_slot);
         int opener_slot = closer_slot - 1;
         int found = -1;
-        bool odd = false;
+        bool is_odd_match = false;
         while (opener_slot >= 0 && found < 0) {
             Node opening_node = nodes[delimiters[opener_slot]];
-            if (opening_node.dead) {
+            if (opening_node.is_dead) {
                 opener_slot = opener_slot - 1;
                 continue;
             }
@@ -735,8 +735,8 @@ void emphasis(List<Node> nodes) {
                 opener_slot = -1;
                 continue;
             }
-            odd = (closing_node.opener || opening_node.closer) && closing_node.original % 3 != 0 && (opening_node.original + closing_node.original) % 3 == 0;
-            if (opening_node.character == closing_node.character && opening_node.opener && !odd) {
+            is_odd_match = (closing_node.can_open || opening_node.can_close) && closing_node.original % 3 != 0 && (opening_node.original + closing_node.original) % 3 == 0;
+            if (opening_node.character == closing_node.character && opening_node.can_open && !is_odd_match) {
                 found = opener_slot;
             } else {
                 opener_slot = opener_slot - 1;
@@ -744,14 +744,14 @@ void emphasis(List<Node> nodes) {
         }
         if (found < 0) {
             closer_slot = closer_slot + 1;
-            if (!odd) {
+            if (!is_odd_match) {
                 if (closing_node.character == 95) {
                     bottom_score = previous;
                 } else {
                     bottom_star = previous;
                 }
-                if (!closing_node.opener) {
-                    closing_node.dead = true;
+                if (!closing_node.can_open) {
+                    closing_node.is_dead = true;
                 }
             }
             continue;
@@ -771,13 +771,13 @@ void emphasis(List<Node> nodes) {
             closing_node.close_tags = closing_node.close_tags + "</em>";
         }
         for (int slot in found + 1 .. closer_slot) {
-            nodes[delimiters[slot]].dead = true;
+            nodes[delimiters[slot]].is_dead = true;
         }
         if (opening_node.count == 0) {
-            opening_node.dead = true;
+            opening_node.is_dead = true;
         }
         if (closing_node.count == 0) {
-            closing_node.dead = true;
+            closing_node.is_dead = true;
             closer_slot = closer_slot + 1;
         }
     }
@@ -788,7 +788,7 @@ void emphasis(List<Node> nodes) {
 int alive_before(List<Node> nodes, List<int> delimiters, int closer_slot) {
     int opener_slot = closer_slot - 1;
     while (opener_slot >= 0) {
-        if (!nodes[delimiters[opener_slot]].dead) {
+        if (!nodes[delimiters[opener_slot]].is_dead) {
             return delimiters[opener_slot];
         }
         opener_slot = opener_slot - 1;
@@ -799,7 +799,7 @@ int alive_before(List<Node> nodes, List<int> delimiters, int closer_slot) {
 str emit(List<Node> nodes) {
     List<str> out = [];
     for (Node node in nodes) {
-        if (node.delimiter) {
+        if (node.is_delimiter) {
             out.push(node.close_tags);
             if (node.count > 0) {
                 out.push(mark_of(node.character).repeat(node.count));

@@ -35,12 +35,12 @@ pub type Item {
 }
 
 /// A bullet or ordered list. `start` is the first number of an ordered list
-/// and is ignored for a bullet one. A `tight` list renders its items'
+/// and is ignored for a bullet one. An `is_tight` list renders its items'
 /// paragraphs without `<p>`.
 pub type Listing {
-    pub bool ordered;
+    pub bool is_ordered;
     pub int start;
-    pub bool tight;
+    pub bool is_tight;
     pub List<Item> items;
 }
 

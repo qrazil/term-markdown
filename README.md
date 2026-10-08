@@ -22,10 +22,10 @@ word, so this program's short option is spelled `--o` and `-o` is an error.
 | | |
 |---|---|
 | `main.m31` | the command line (`lib/args`) and the files (`lib/io`) |
-| `blocks.m31` | the block parser: source to a list of `doc.Block` |
-| `inlines.m31` | the inline parser: one block's raw text to HTML |
-| `render.m31` | the tree to HTML, with cmark's whitespace |
-| `doc.m31` | the tree's types alone, so the other three need not import each other |
+| `MD_blocks.m31` | the block parser: source to a list of `MD_doc.Block` |
+| `MD_inlines.m31` | the inline parser: one block's raw text to HTML |
+| `MD_render.m31` | the tree to HTML, with cmark's whitespace |
+| `MD_doc.m31` | the tree's types alone, so the other three need not import each other |
 
 The block parser is line based and recursive: a container — a block quote, a
 list item — strips its own marker off the lines it owns and hands the rest
@@ -122,7 +122,7 @@ executable version of this list.
    50 000 unmatched backticks, 50 000 unmatched `[`, 20 000 unmatched `![`,
    each under two seconds; and a generated 1 MB document, about 118 ms at
    `-O2`. These are guards against an algorithm, not a benchmark — the
-   unmatched-`[` case took 4.5 seconds before `inlines.brackets` replaced a
+   unmatched-`[` case took 4.5 seconds before `MD_inlines.brackets` replaced a
    forward search per bracket with one stack pass. (The oracle takes nine
    minutes on the 1 MB file, which says more about `commonmark.py` than
    about anything here.)

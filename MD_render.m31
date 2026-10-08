@@ -5,9 +5,9 @@
 // only if the output does not already end in one. Getting that rule right is
 // most of what makes the output comparable with a reference implementation --
 // the tags are easy and the whitespace is not.
-import doc;
+import MD_doc;
 import html;
-import inlines;
+import MD_inlines;
 import text;
 
 // An output buffer that knows whether it is at the start of a line. Text is
@@ -15,7 +15,7 @@ import text;
 // with `+` is quadratic.
 type Out {
     List<str> parts;
-    bool at_line_start;
+    bool is_at_line_start;
 }
 
 void Out.put(str chunk) {
@@ -23,13 +23,13 @@ void Out.put(str chunk) {
         return;
     }
     parts.push(chunk);
-    at_line_start = chunk.ends_with("\n");
+    is_at_line_start = chunk.ends_with("\n");
 }
 
 void Out.ensure_newline() {
-    if (!at_line_start) {
+    if (!is_at_line_start) {
         parts.push("\n");
-        at_line_start = true;
+        is_at_line_start = true;
     }
 }
 
@@ -42,19 +42,19 @@ Out new_out() {
 }
 
 /// `block_list` as HTML: one line per block, cmark's layout.
-pub str document(List<doc.Block> block_list) {
+pub str document(List<MD_doc.Block> block_list) {
     Out out = new_out();
     blocks(out, block_list, false);
     return out.text();
 }
 
-void blocks(Out out, List<doc.Block> block_list, bool tight) {
-    for (doc.Block current_block in block_list) {
-        block(out, current_block, tight);
+void blocks(Out out, List<MD_doc.Block> block_list, bool is_tight) {
+    for (MD_doc.Block current_block in block_list) {
+        block(out, current_block, is_tight);
     }
 }
 
-void block(Out out, doc.Block current_block, bool tight) {
+void block(Out out, MD_doc.Block current_block, bool is_tight) {
     match (current_block) {
         case Rule: {
             out.ensure_newline();
@@ -65,25 +65,25 @@ void block(Out out, doc.Block current_block, bool tight) {
             // Inside a tight list a paragraph has no tags at all. That is
             // what "tight" means, and it is why the flag has to reach this
             // far down.
-            if (tight) {
-                out.put(inlines.render(raw));
+            if (is_tight) {
+                out.put(MD_inlines.render(raw));
             } else {
                 out.ensure_newline();
                 out.put("<p>");
-                out.put(inlines.render(raw));
+                out.put(MD_inlines.render(raw));
                 out.put("</p>");
                 out.ensure_newline();
             }
         }
-        case Heading(doc.Heading heading): {
+        case Heading(MD_doc.Heading heading): {
             str tag = str(heading.level);
             out.ensure_newline();
             out.put("<h" + tag + ">");
-            out.put(inlines.render(heading.text));
+            out.put(MD_inlines.render(heading.text));
             out.put("</h" + tag + ">");
             out.ensure_newline();
         }
-        case Fence(doc.Code code): {
+        case Fence(MD_doc.Code code): {
             out.ensure_newline();
             out.put("<pre><code");
             str language = first_word(code.info);
@@ -95,7 +95,7 @@ void block(Out out, doc.Block current_block, bool tight) {
             out.put("</code></pre>");
             out.ensure_newline();
         }
-        case Quoted(doc.Quote quote): {
+        case Quoted(MD_doc.Quote quote): {
             out.ensure_newline();
             out.put("<blockquote>");
             out.ensure_newline();
@@ -104,9 +104,9 @@ void block(Out out, doc.Block current_block, bool tight) {
             out.put("</blockquote>");
             out.ensure_newline();
         }
-        case Bullets(doc.Listing listing): {
+        case Bullets(MD_doc.Listing listing): {
             out.ensure_newline();
-            if (listing.ordered) {
+            if (listing.is_ordered) {
                 if (listing.start == 1) {
                     out.put("<ol>");
                 } else {
@@ -116,28 +116,28 @@ void block(Out out, doc.Block current_block, bool tight) {
                 out.put("<ul>");
             }
             out.ensure_newline();
-            for (doc.Item item in listing.items) {
+            for (MD_doc.Item item in listing.items) {
                 out.ensure_newline();
                 out.put("<li>");
-                blocks(out, item.kids, listing.tight);
+                blocks(out, item.kids, listing.is_tight);
                 out.put("</li>");
                 out.ensure_newline();
             }
             out.ensure_newline();
-            if (listing.ordered) {
+            if (listing.is_ordered) {
                 out.put("</ol>");
             } else {
                 out.put("</ul>");
             }
             out.ensure_newline();
         }
-        case Grid(doc.Table grid): {
+        case Grid(MD_doc.Table grid): {
             table(out, grid);
         }
     }
 }
 
-void table(Out out, doc.Table grid) {
+void table(Out out, MD_doc.Table grid) {
     out.ensure_newline();
     out.put("<table>");
     out.ensure_newline();
@@ -147,7 +147,7 @@ void table(Out out, doc.Table grid) {
     out.ensure_newline();
     for (int i in 0 .. grid.heads.size()) {
         out.put("<th" + align_attribute(grid.align, i) + ">");
-        out.put(inlines.render(grid.heads[i]));
+        out.put(MD_inlines.render(grid.heads[i]));
         out.put("</th>");
         out.ensure_newline();
     }
@@ -163,7 +163,7 @@ void table(Out out, doc.Table grid) {
             out.ensure_newline();
             for (int column in 0 .. row.size()) {
                 out.put("<td" + align_attribute(grid.align, column) + ">");
-                out.put(inlines.render(row[column]));
+                out.put(MD_inlines.render(row[column]));
                 out.put("</td>");
                 out.ensure_newline();
             }
@@ -181,13 +181,13 @@ str align_attribute(List<int> align, int column) {
     if (column >= align.size()) {
         return "";
     }
-    if (align[column] == doc.ALIGN_LEFT) {
+    if (align[column] == MD_doc.ALIGN_LEFT) {
         return " align=\"left\"";
     }
-    if (align[column] == doc.ALIGN_CENTER) {
+    if (align[column] == MD_doc.ALIGN_CENTER) {
         return " align=\"center\"";
     }
-    if (align[column] == doc.ALIGN_RIGHT) {
+    if (align[column] == MD_doc.ALIGN_RIGHT) {
         return " align=\"right\"";
     }
     return "";

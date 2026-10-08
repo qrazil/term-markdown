@@ -7,13 +7,13 @@
 //
 // Inline content is NOT parsed here. A block keeps the raw source of its own
 // text and `render` parses it later (see `doc`).
-import doc;
+import MD_doc;
 import math;
 import text;
 
 /// `source` as blocks. Line endings are normalised and leading tabs expanded
 /// before anything else looks at the text.
-pub List<doc.Block> parse(str source) {
+pub List<MD_doc.Block> parse(str source) {
     return parse_lines(split_lines(source));
 }
 
@@ -35,18 +35,18 @@ str expand_tabs(str line) {
     int length = line.size();
     int index = 0;
     int column = 0;
-    bool any = false;
+    bool has_tab = false;
     while (index < length) {
         int character = line.byte_at(index);
         if (character == '\t') {
-            any = true;
+            has_tab = true;
         } else if (character != ' ') {
             index = length;
             continue;
         }
         index = index + 1;
     }
-    if (!any) {
+    if (!has_tab) {
         return line;
     }
     List<str> out = [];
@@ -88,7 +88,7 @@ str chop(str line, int skip) {
     return line.substr(skip, length);
 }
 
-bool blank(str line) {
+bool is_blank(str line) {
     return line.trim().size() == 0;
 }
 
@@ -96,7 +96,7 @@ bool blank(str line) {
 
 // `***`, `---`, `___`: three or more of one character, spaces allowed
 // between them, nothing else on the line. `stripped` has had its indent removed.
-bool thematic(str stripped) {
+bool is_thematic_break(str stripped) {
     int length = stripped.size();
     if (length < 3) {
         return false;
@@ -215,8 +215,8 @@ int setext_level(str stripped) {
 // characters -- 1 for `-`, 3 for `10.` -- and `character` is `-`, `+`, `*`, `.` or
 // `)`, which is what decides whether two items belong to one list.
 type Marker {
-    bool found;
-    bool ordered;
+    bool is_found;
+    bool is_ordered;
     int number;
     int character;
     int length;
@@ -252,22 +252,22 @@ Marker marker_of(str stripped) {
 }
 
 // Does `stripped` begin a block that a paragraph cannot swallow?
-bool starts_block(str stripped) {
-    return thematic(stripped) || atx_level(stripped) > 0 || fence_character(stripped) != 0 || stripped.starts_with(">");
+bool is_block_start(str stripped) {
+    return is_thematic_break(stripped) || atx_level(stripped) > 0 || fence_character(stripped) != 0 || stripped.starts_with(">");
 }
 
 // A list item may interrupt a paragraph only when it is not empty, and an
 // ordered one only when it is numbered 1 -- otherwise every line beginning
 // "2024. " would start a list.
-bool interrupts(str stripped) {
+bool can_interrupt_paragraph(str stripped) {
     Marker marker = marker_of(stripped);
-    if (!marker.found) {
+    if (!marker.is_found) {
         return false;
     }
     if (chop(stripped, marker.length).trim().size() == 0) {
         return false;
     }
-    return !marker.ordered || marker.number == 1;
+    return !marker.is_ordered || marker.number == 1;
 }
 
 // Add `line` to `held` as a LAZY continuation of the paragraph already
@@ -287,13 +287,13 @@ void lazily(List<str> held, str line) {
 
 // --- the parser --------------------------------------------------------------
 
-List<doc.Block> parse_lines(List<str> lines) {
-    List<doc.Block> out = [];
+List<MD_doc.Block> parse_lines(List<str> lines) {
+    List<MD_doc.Block> out = [];
     int line_count = lines.size();
     int line_index = 0;
     while (line_index < line_count) {
         str line = lines[line_index];
-        if (blank(line)) {
+        if (is_blank(line)) {
             line_index = line_index + 1;
             continue;
         }
@@ -303,14 +303,14 @@ List<doc.Block> parse_lines(List<str> lines) {
             line_index = indented_code(out, lines, line_index);
             continue;
         }
-        if (thematic(stripped)) {
-            out.push(doc.Block.Rule);
+        if (is_thematic_break(stripped)) {
+            out.push(MD_doc.Block.Rule);
             line_index = line_index + 1;
             continue;
         }
         int level = atx_level(stripped);
         if (level > 0) {
-            out.push(doc.Block.Heading(doc.Heading(level, atx_text(stripped, level))));
+            out.push(MD_doc.Block.Heading(MD_doc.Heading(level, atx_text(stripped, level))));
             line_index = line_index + 1;
             continue;
         }
@@ -322,7 +322,7 @@ List<doc.Block> parse_lines(List<str> lines) {
             line_index = block_quote(out, lines, line_index);
             continue;
         }
-        if (marker_of(stripped).found) {
+        if (marker_of(stripped).is_found) {
             line_index = list_at(out, lines, line_index);
             continue;
         }
@@ -337,14 +337,14 @@ List<doc.Block> parse_lines(List<str> lines) {
 
 // --- leaf blocks -------------------------------------------------------------
 
-int indented_code(List<doc.Block> out, List<str> lines, int start_line) {
+int indented_code(List<MD_doc.Block> out, List<str> lines, int start_line) {
     int line_count = lines.size();
     List<str> body = [];
     int line_index = start_line;
     int last = start_line;
     while (line_index < line_count) {
         str line = lines[line_index];
-        if (blank(line)) {
+        if (is_blank(line)) {
             body.push("");
             line_index = line_index + 1;
             continue;
@@ -360,11 +360,11 @@ int indented_code(List<doc.Block> out, List<str> lines, int start_line) {
     while (body.size() > 0 && body[body.size() - 1].size() == 0) {
         body.pop();
     }
-    out.push(doc.Block.Fence(doc.Code("", body.join("\n") + "\n")));
+    out.push(MD_doc.Block.Fence(MD_doc.Code("", body.join("\n") + "\n")));
     return last + 1;
 }
 
-int fenced_code(List<doc.Block> out, List<str> lines, int start_line) {
+int fenced_code(List<MD_doc.Block> out, List<str> lines, int start_line) {
     int line_count = lines.size();
     str open = lines[start_line];
     int indent = indent_of(open);
@@ -374,13 +374,13 @@ int fenced_code(List<doc.Block> out, List<str> lines, int start_line) {
     str info = chop(stripped, width).trim();
     List<str> body = [];
     int line_index = start_line + 1;
-    bool closed = false;
-    while (line_index < line_count && !closed) {
+    bool is_closed = false;
+    while (line_index < line_count && !is_closed) {
         str line = lines[line_index];
         int line_indent = indent_of(line);
         str line_stripped = chop(line, line_indent);
         if (line_indent < 4 && run_length(line_stripped, character) >= width && chop(line_stripped, run_length(line_stripped, character)).trim().size() == 0) {
-            closed = true;
+            is_closed = true;
             line_index = line_index + 1;
             continue;
         }
@@ -391,16 +391,16 @@ int fenced_code(List<doc.Block> out, List<str> lines, int start_line) {
     if (body.size() > 0) {
         text_of = body.join("\n") + "\n";
     }
-    out.push(doc.Block.Fence(doc.Code(info, text_of)));
+    out.push(MD_doc.Block.Fence(MD_doc.Code(info, text_of)));
     return line_index;
 }
 
-int block_quote(List<doc.Block> out, List<str> lines, int start_line) {
+int block_quote(List<MD_doc.Block> out, List<str> lines, int start_line) {
     int line_count = lines.size();
     List<str> inner = [];
     int line_index = start_line;
-    bool done = false;
-    while (line_index < line_count && !done) {
+    bool is_done = false;
+    while (line_index < line_count && !is_done) {
         str line = lines[line_index];
         int line_indent = indent_of(line);
         str stripped = chop(line, line_indent);
@@ -415,44 +415,44 @@ int block_quote(List<doc.Block> out, List<str> lines, int start_line) {
         }
         // Lazy continuation: a bare line carries on the quote's paragraph,
         // but only if a paragraph is what it would carry on.
-        if (blank(line) || inner.size() == 0 || blank(inner[inner.size() - 1])) {
-            done = true;
+        if (is_blank(line) || inner.size() == 0 || is_blank(inner[inner.size() - 1])) {
+            is_done = true;
             continue;
         }
         // Any list marker ends the quote, not only one that could interrupt
         // a paragraph: a lazy line is matched against the DOCUMENT, where
         // there is no paragraph for the "must not be empty, must be
         // numbered 1" rule to protect.
-        if (line_indent < 4 && (starts_block(stripped) || marker_of(stripped).found)) {
-            done = true;
+        if (line_indent < 4 && (is_block_start(stripped) || marker_of(stripped).is_found)) {
+            is_done = true;
             continue;
         }
         lazily(inner, line);
         line_index = line_index + 1;
     }
-    out.push(doc.Block.Quoted(doc.Quote(parse_lines(inner))));
+    out.push(MD_doc.Block.Quoted(MD_doc.Quote(parse_lines(inner))));
     return line_index;
 }
 
-int paragraph(List<doc.Block> out, List<str> lines, int start_line) {
+int paragraph(List<MD_doc.Block> out, List<str> lines, int start_line) {
     int line_count = lines.size();
     List<str> paragraph_lines = [];
     int line_index = start_line;
-    bool done = false;
-    while (line_index < line_count && !done) {
+    bool is_done = false;
+    while (line_index < line_count && !is_done) {
         str line = lines[line_index];
-        if (blank(line)) {
-            done = true;
+        if (is_blank(line)) {
+            is_done = true;
             continue;
         }
         int line_indent = indent_of(line);
         str stripped = chop(line, line_indent);
         if (line_indent < 4 && paragraph_lines.size() > 0 && setext_level(stripped) > 0) {
-            out.push(doc.Block.Heading(doc.Heading(setext_level(stripped), paragraph_lines.join("\n").trim())));
+            out.push(MD_doc.Block.Heading(MD_doc.Heading(setext_level(stripped), paragraph_lines.join("\n").trim())));
             return line_index + 1;
         }
-        if (line_indent < 4 && (starts_block(stripped) || interrupts(stripped))) {
-            done = true;
+        if (line_indent < 4 && (is_block_start(stripped) || can_interrupt_paragraph(stripped))) {
+            is_done = true;
             continue;
         }
         paragraph_lines.push(text.trim_start(line));
@@ -462,28 +462,28 @@ int paragraph(List<doc.Block> out, List<str> lines, int start_line) {
         // The trailing spaces of the LAST line are not a hard break -- there
         // is no line after them -- so the paragraph loses them here, where
         // the inline parser would otherwise print them.
-        out.push(doc.Block.Paragraph(paragraph_lines.join("\n").trim()));
+        out.push(MD_doc.Block.Paragraph(paragraph_lines.join("\n").trim()));
     }
     return line_index;
 }
 
 // --- lists -------------------------------------------------------------------
 
-int list_at(List<doc.Block> out, List<str> lines, int start_line) {
+int list_at(List<MD_doc.Block> out, List<str> lines, int start_line) {
     int line_count = lines.size();
     Marker first = marker_of(chop(lines[start_line], indent_of(lines[start_line])));
-    List<doc.Item> items = [];
-    bool loose = false;
+    List<MD_doc.Item> items = [];
+    bool is_loose = false;
     int line_index = start_line;
-    bool done = false;
-    while (line_index < line_count && !done) {
+    bool is_done = false;
+    while (line_index < line_count && !is_done) {
         str line = lines[line_index];
         int line_indent = indent_of(line);
         Marker marker = marker_of(chop(line, line_indent));
         // `- - -` is a thematic break and not three items: the break wins,
         // here as in `parse_lines`.
-        if (line_indent >= 4 || thematic(chop(line, line_indent)) || !marker.found || marker.character != first.character) {
-            done = true;
+        if (line_indent >= 4 || is_thematic_break(chop(line, line_indent)) || !marker.is_found || marker.character != first.character) {
+            is_done = true;
             continue;
         }
         // Where this item's content starts. One to four spaces after the
@@ -501,21 +501,21 @@ int list_at(List<doc.Block> out, List<str> lines, int start_line) {
         List<str> body = [];
         body.push(chop(line, content_indent));
         line_index = line_index + 1;
-        bool pending = false;
-        bool ended = false;
-        while (line_index < line_count && !ended) {
+        bool has_pending_blank = false;
+        bool is_ended = false;
+        while (line_index < line_count && !is_ended) {
             str following = lines[line_index];
-            if (blank(following)) {
-                pending = true;
+            if (is_blank(following)) {
+                has_pending_blank = true;
                 line_index = line_index + 1;
                 continue;
             }
             int following_indent = indent_of(following);
             if (following_indent >= content_indent) {
-                if (pending) {
+                if (has_pending_blank) {
                     body.push("");
-                    loose = true;
-                    pending = false;
+                    is_loose = true;
+                    has_pending_blank = false;
                 }
                 body.push(chop(following, content_indent));
                 line_index = line_index + 1;
@@ -529,34 +529,34 @@ int list_at(List<doc.Block> out, List<str> lines, int start_line) {
             // and `*` alone is an empty item of a new list. The "must not be
             // empty, must be numbered 1" rule is only for interrupting a
             // paragraph, and a lazy line is matched against the document.
-            bool lazy = following_indent >= 4 || !starts_block(following_stripped) && !marker_of(following_stripped).found;
-            if (!pending && !blank(body[body.size() - 1]) && lazy) {
+            bool is_lazy = following_indent >= 4 || !is_block_start(following_stripped) && !marker_of(following_stripped).is_found;
+            if (!has_pending_blank && !is_blank(body[body.size() - 1]) && is_lazy) {
                 lazily(body, following);
                 line_index = line_index + 1;
                 continue;
             }
-            ended = true;
+            is_ended = true;
         }
-        items.push(doc.Item(parse_lines(body)));
+        items.push(MD_doc.Item(parse_lines(body)));
         // A blank line between two items makes the whole list loose -- but
         // only if another item really follows. `- - -` after a blank line
         // looks like a marker and is a thematic break, which ends the list
         // and leaves it tight.
-        if (pending && line_index < line_count) {
+        if (has_pending_blank && line_index < line_count) {
             str next = lines[line_index];
             int next_indent = indent_of(next);
             str next_stripped = chop(next, next_indent);
             Marker next_marker = marker_of(next_stripped);
-            if (next_indent < 4 && !thematic(next_stripped) && next_marker.found && next_marker.character == first.character) {
-                loose = true;
+            if (next_indent < 4 && !is_thematic_break(next_stripped) && next_marker.is_found && next_marker.character == first.character) {
+                is_loose = true;
             }
         }
     }
     int start = 1;
-    if (first.ordered) {
+    if (first.is_ordered) {
         start = first.number;
     }
-    out.push(doc.Block.Bullets(doc.Listing(first.ordered, start, !loose, items)));
+    out.push(MD_doc.Block.Bullets(MD_doc.Listing(first.is_ordered, start, !is_loose, items)));
     return line_index;
 }
 
@@ -590,14 +590,14 @@ int align_of(str cell) {
     if (length == 0) {
         return -1;
     }
-    bool lead = trimmed.byte_at(0) == ':';
-    bool tail = trimmed.byte_at(length - 1) == ':';
+    bool has_leading_colon = trimmed.byte_at(0) == ':';
+    bool has_trailing_colon = trimmed.byte_at(length - 1) == ':';
     int dash_start = 0;
-    if (lead) {
+    if (has_leading_colon) {
         dash_start = 1;
     }
     int dash_end = length;
-    if (tail) {
+    if (has_trailing_colon) {
         dash_end = length - 1;
     }
     if (dash_end <= dash_start) {
@@ -608,16 +608,16 @@ int align_of(str cell) {
             return -1;
         }
     }
-    if (lead && tail) {
-        return doc.ALIGN_CENTER;
+    if (has_leading_colon && has_trailing_colon) {
+        return MD_doc.ALIGN_CENTER;
     }
-    if (lead) {
-        return doc.ALIGN_LEFT;
+    if (has_leading_colon) {
+        return MD_doc.ALIGN_LEFT;
     }
-    if (tail) {
-        return doc.ALIGN_RIGHT;
+    if (has_trailing_colon) {
+        return MD_doc.ALIGN_RIGHT;
     }
-    return doc.ALIGN_NONE;
+    return MD_doc.ALIGN_NONE;
 }
 
 // One row split on its unescaped pipes, with the optional leading and
@@ -659,7 +659,7 @@ List<str> cells_of(str line) {
     return out;
 }
 
-int table_at(List<doc.Block> out, List<str> lines, int start_line) {
+int table_at(List<MD_doc.Block> out, List<str> lines, int start_line) {
     List<str> heads = cells_of(lines[start_line]);
     List<int> align = [];
     for (str cell in cells_of(lines[start_line + 1])) {
@@ -668,17 +668,17 @@ int table_at(List<doc.Block> out, List<str> lines, int start_line) {
     List<List<str>> rows = [];
     int line_count = lines.size();
     int line_index = start_line + 2;
-    bool done = false;
-    while (line_index < line_count && !done) {
+    bool is_done = false;
+    while (line_index < line_count && !is_done) {
         str line = lines[line_index];
-        if (blank(line)) {
-            done = true;
+        if (is_blank(line)) {
+            is_done = true;
             continue;
         }
         int line_indent = indent_of(line);
         str stripped = chop(line, line_indent);
-        if (line_indent < 4 && (starts_block(stripped) || marker_of(stripped).found)) {
-            done = true;
+        if (line_indent < 4 && (is_block_start(stripped) || marker_of(stripped).is_found)) {
+            is_done = true;
             continue;
         }
         List<str> cells = cells_of(line);
@@ -691,6 +691,6 @@ int table_at(List<doc.Block> out, List<str> lines, int start_line) {
         rows.push(cells);
         line_index = line_index + 1;
     }
-    out.push(doc.Block.Grid(doc.Table(heads, align, rows)));
+    out.push(MD_doc.Block.Grid(MD_doc.Table(heads, align, rows)));
     return line_index;
 }

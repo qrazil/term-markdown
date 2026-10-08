@@ -105,7 +105,7 @@ fi
 # Not correctness: these are the shapes that turn a parser quadratic or
 # overflow its stack. 50 000 unmatched `[` used to take 4.5 seconds, because
 # every one of them searched forward for a `]` that was not there; the
-# bracket map in `inlines.brackets` is why it is 7 ms now. The generous
+# bracket map in `MD_inlines.brackets` is why it is 7 ms now. The generous
 # bounds are so this fails on an algorithm, not on a slow machine.
 if [ -z "$filter" ]; then
     P=$(mktemp -d)

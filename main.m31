@@ -10,16 +10,16 @@
 //
 // See README.md for what of CommonMark is in, what is out, and why.
 import args;
-import blocks;
+import MD_blocks;
 import html;
 import io;
 import os;
-import render;
+import MD_render;
 
 // `source` as HTML. This is the whole program in one line; everything else here
 // is the command line and the files.
 str convert(str source) {
-    return render.document(blocks.parse(source));
+    return MD_render.document(MD_blocks.parse(source));
 }
 
 // Standard input, whole. `io.read_line_of` would do it a line at a time and
