@@ -1,7 +1,7 @@
 # `markdown` — a CommonMark subset to HTML
 
-The first real application written in this language. About 1 900 lines across
-five modules, no Rust, no C, and nothing in `lib/` changed to make it fit.
+The first real application written in this language. About 2 300 lines across
+seven modules, no Rust, no C, and nothing in `lib/` changed to make it fit.
 `docs/FRICTION.md` is the other half of the exercise: what the
 language made awkward, what the standard library did not have, and what it
 did better than the alternatives.
@@ -11,11 +11,62 @@ did better than the alternatives.
 
     markdown README.md                       the HTML fragment, on stdout
     markdown --full --title T in.md --out f  a whole document, to a file
+    markdown --full --theme bulma in.md      the same, styled by Bulma
+    markdown --full --css site.css in.md     the same, plus your own CSS
     markdown                                 reads standard input
     markdown --help
 
 Note the two dashes on `--out`: `lib/args` reads a single dash as a command
 word, so this program's short option is spelled `--o` and `-o` is an error.
+The same goes for every option here: `--theme`, never `-theme`.
+
+## `--full`: a page you can open
+
+Without `--full` the output is the HTML fragment and nothing else, byte for
+byte what it has always been. With it, the fragment is wrapped in a complete
+page: `<!doctype html>`, `<html lang="en">`, the charset and viewport `<meta>`
+tags, a `<title>`, the styling, and the body.
+
+| Option | |
+|---|---|
+| `--title TEXT` | the page's `<title>`, escaped. Without it: the text of the first top-level `#` heading (markup removed, an image contributing its `alt`), else the file name without its extension (`notes.v2.md` is `notes.v2`), else `Document` (standard input). An empty `--title ''` counts as none |
+| `--theme default` | the built-in stylesheet, inlined in a `<style>` element. This is the default |
+| `--theme bulma` | Bulma 1.x, linked from the jsDelivr CDN, with the body wrapped in `<main class="container"><div class="content">`. This theme needs a network |
+| `--theme none` | no CSS at all: the browser's own defaults |
+| `--css REF` | one extra stylesheet, after the theme's. An `http://` or `https://` URL becomes a `<link rel="stylesheet">`; anything else is a file, read and inlined in a `<style>` element. Given once |
+
+`--theme`, `--css` and `--title` mean nothing without `--full` and are ignored
+there; an unknown `--theme` is a usage error either way (exit 2).
+
+**The default page is self-contained.** The stylesheet is about 3.2 KB, lives
+in `MD_theme.m31`, and the page links to nothing and loads nothing: it works
+offline, from a file, in an email attachment. It is classless — it styles the
+plain elements the renderer already writes, so the fragment gains no
+attributes — and it covers a text column of 70 characters at most with side
+padding on a phone, a system font stack, a heading scale, `code` and `pre`
+(long lines scroll sideways rather than overflow), block quotes, lists, tables
+with borders, zebra rows and the column alignment the markdown asked for,
+rules, images capped at the column's width, and links. Light and dark are one
+set of rules over CSS custom properties, switched by
+`prefers-color-scheme`; a `@media print` block turns it black on white and
+prints each external link's address after it.
+
+**Bulma.**
+
+    markdown --full --theme bulma in.md --out index.html
+
+Bulma 1.x follows `prefers-color-scheme` itself. Add your own rules after it
+with `--css`:
+
+    markdown --full --theme bulma --css tweaks.css in.md --out index.html
+
+**Your own CSS.** `--theme none --css site.css` is a page with only your
+stylesheet; `--css https://example.com/site.css` links it instead of reading
+it. Whatever is inlined is refused if it contains `</style` (in any case),
+which would end the `<style>` element and let the rest run as markup, and a
+file that cannot be read or is not UTF-8 stops the program with a message
+and exit 1, before anything is written. URLs are escaped for the attribute
+they sit in.
 
 ## The shape of it
 
@@ -25,6 +76,8 @@ word, so this program's short option is spelled `--o` and `-o` is an error.
 | `MD_blocks.m31` | the block parser: source to a list of `MD_doc.Block` |
 | `MD_inlines.m31` | the inline parser: one block's raw text to HTML |
 | `MD_render.m31` | the tree to HTML, with cmark's whitespace |
+| `MD_theme.m31` | the `--full` page: the embedded stylesheet, the three themes, the head and body |
+| `MD_title.m31` | the default `<title>`: first heading, else file stem, else `Document` |
 | `MD_doc.m31` | the tree's types alone, so the other three need not import each other |
 
 The block parser is line based and recursive: a container — a block quote, a
@@ -96,7 +149,7 @@ executable version of this list.
 
 ## How it is tested
 
-`bash scripts/test.sh` does five things.
+`bash scripts/test.sh` does six things.
 
 1. **The corpus.** `tests/*.md` through the program, diffed against
    `tests/*.html`. Twenty-three cases, chosen for the awkward parts:
@@ -117,7 +170,15 @@ executable version of this list.
    not.
 4. **The command line.** stdin, `-`, `--full`, `--title`, `--out`, a missing
    file, a bad option.
-5. **Pathological inputs and speed.** 20 000 nested block quotes, 400 nested
+5. **The `--full` pages.** Golden files in `tests/full/` for each theme, for
+   `--css` as a URL and as a file, and for Bulma with a URL after it; the
+   default-title rule in a dozen cases; the errors (a missing, unreadable,
+   non-UTF-8 or `</style`-carrying `--css` file, an unknown theme, `--css`
+   twice); the default page's size and that it fetches nothing; and that a
+   fragment is unchanged by the page options. These goldens are written by the
+   program and reviewed by eye, not derived from the oracle: regenerate after
+   a deliberate change with `UPDATE_GOLDEN=1 bash scripts/test.sh full`.
+6. **Pathological inputs and speed.** 20 000 nested block quotes, 400 nested
    list items, 20 000 emphasis runs in one paragraph, a 2 MB single line,
    50 000 unmatched backticks, 50 000 unmatched `[`, 20 000 unmatched `![`,
    each under two seconds; and a generated 1 MB document, about 118 ms at

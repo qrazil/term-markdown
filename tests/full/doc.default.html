@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The Quick Guide &amp; &lt;Friends&gt;</title>
+<style>
+/* markdown default theme: classless, self-contained, light and dark */
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #1d2430;
+  --muted: #5b6676;
+  --link: #0b5fd1;
+  --rule: #d5dae1;
+  --code-bg: #f1f3f6;
+  --zebra: #f6f8fa;
+  --quote: #9aa7b8;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14181f;
+    --fg: #dfe4ec;
+    --muted: #9ba6b6;
+    --link: #7db4ff;
+    --rule: #323a47;
+    --code-bg: #1e2430;
+    --zebra: #191f28;
+    --quote: #4d5b70;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  max-width: 70ch;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+  background: var(--bg);
+  color: var(--fg);
+  font: 1rem/1.65 system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  overflow-wrap: break-word;
+}
+h1, h2, h3, h4, h5, h6 { margin: 2em 0 0.5em; line-height: 1.25; font-weight: 650; }
+h1 { margin-top: 0; font-size: 2.1rem; }
+h2 { font-size: 1.6rem; padding-bottom: 0.25em; border-bottom: 1px solid var(--rule); }
+h3 { font-size: 1.3rem; }
+h4 { font-size: 1.1rem; }
+h5, h6 { font-size: 1rem; }
+h6 { color: var(--muted); }
+p, ul, ol, pre, blockquote, table { margin: 0 0 1em; }
+a { color: var(--link); text-underline-offset: 0.15em; }
+a:hover { text-decoration-thickness: 2px; }
+ul, ol { padding-left: 1.6em; }
+li > ul, li > ol { margin: 0.25em 0; }
+li + li { margin-top: 0.25em; }
+code, pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.9em;
+}
+code { padding: 0.1em 0.35em; border-radius: 4px; background: var(--code-bg); }
+pre {
+  padding: 0.85em 1em;
+  border-radius: 6px;
+  background: var(--code-bg);
+  overflow-x: auto;
+  line-height: 1.45;
+  tab-size: 4;
+}
+pre code { padding: 0; background: none; font-size: inherit; }
+blockquote {
+  padding: 0.1em 1em;
+  border-left: 4px solid var(--quote);
+  color: var(--muted);
+}
+blockquote > :last-child { margin-bottom: 0; }
+hr { margin: 2em 0; border: 0; border-top: 1px solid var(--rule); }
+img { max-width: 100%; height: auto; }
+table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+th, td { padding: 0.4em 0.8em; border: 1px solid var(--rule); text-align: start; }
+th { font-weight: 650; background: var(--code-bg); }
+tbody tr:nth-child(even) { background: var(--zebra); }
+th[align=left], td[align=left] { text-align: left; }
+th[align=center], td[align=center] { text-align: center; }
+th[align=right], td[align=right] { text-align: right; }
+@media (min-width: 40rem) {
+  body { padding: 3rem 1.5rem 5rem; }
+}
+@media print {
+  :root {
+    --bg: #fff;
+    --fg: #000;
+    --muted: #333;
+    --link: #000;
+    --rule: #999;
+    --code-bg: #f2f2f2;
+    --zebra: #f7f7f7;
+    --quote: #999;
+  }
+  body { max-width: none; padding: 0; font-size: 11pt; line-height: 1.45; }
+  a { text-decoration: underline; }
+  a[href^='http']::after { content: ' (' attr(href) ')'; font-size: 0.85em; word-break: break-all; }
+  pre { white-space: pre-wrap; overflow: visible; }
+  table { display: table; width: 100%; overflow: visible; }
+  h1, h2, h3, h4, h5, h6 { break-after: avoid; }
+  pre, blockquote, tr, img { break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+<p>Intro line before the heading.</p>
+<h1>The <em>Quick</em> Guide &amp; &lt;Friends&gt;</h1>
+<p>A paragraph with a <a href="https://example.com/a?b=1&amp;c=2">link</a>, <code>inline code</code> and an
+image: <img src="cat.png" alt="a cat" title="Tom" />.</p>
+<h2>Lists</h2>
+<ul>
+<li>one</li>
+<li>two
+<ol>
+<li>nested</li>
+<li>ordered</li>
+</ol>
+</li>
+</ul>
+<blockquote>
+<p>A quote,
+over two lines.</p>
+</blockquote>
+<pre><code class="language-sh">echo &quot;hello&quot; | tr a-z A-Z
+</code></pre>
+<table>
+<thead>
+<tr>
+<th align="left">left</th>
+<th align="center">centre</th>
+<th align="right">right</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left">1</td>
+<td align="center">2</td>
+<td align="right">3</td>
+</tr>
+<tr>
+<td align="left">four</td>
+<td align="center">five</td>
+<td align="right">six</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h1>A second heading</h1>
+</body>
+</html>

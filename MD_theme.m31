@@ -1,0 +1,196 @@
+// The page around the HTML that `--full` writes: the embedded stylesheet, the
+// choice between the three themes, and the head and body that carry them.
+//
+// The default theme is classless -- it styles the plain semantic HTML that
+// `MD_render` writes, so no class is ever added to the fragment -- and
+// self-contained: nothing is fetched, the page works offline. Light and dark
+// are the same rules over two sets of CSS custom properties.
+//
+// The CSS is written one `push` per line because the language has no
+// multi-line string literal. It uses single quotes throughout so that no
+// element needs an escape.
+import html;
+import MD_inlines;
+
+/// Bulma 1.x from the jsDelivr CDN: what `--theme bulma` links.
+pub const str BULMA_URL = "https://cdn.jsdelivr.net/npm/bulma@1/css/bulma.min.css";
+/// The theme names `--theme` accepts.
+pub const str THEME_NAMES = "default, bulma or none";
+
+/// Is `name` one of the three themes?
+pub bool is_theme(str name) {
+    return name == "default" || name == "bulma" || name == "none";
+}
+
+/// Is `reference` an http:// or https:// URL, as opposed to a file path?
+pub bool is_url(str reference) {
+    str lowered = reference.to_lower();
+    return lowered.starts_with("http://") || lowered.starts_with("https://");
+}
+
+/// Can `css` sit inside a `<style>` element? Not if it contains `</style`
+/// in any case: the HTML parser would end the element there and read the rest
+/// as markup. CSS has no use for the sequence outside a string or a comment,
+/// so it is refused rather than rewritten.
+pub bool can_inline(str css) {
+    return !css.to_lower().contains("</style");
+}
+
+/// The default stylesheet, ending in a newline.
+pub str stylesheet() {
+    List<str> rules = [];
+    rules.push("/* markdown default theme: classless, self-contained, light and dark */");
+    rules.push(":root {");
+    rules.push("  color-scheme: light dark;");
+    rules.push("  --bg: #ffffff;");
+    rules.push("  --fg: #1d2430;");
+    rules.push("  --muted: #5b6676;");
+    rules.push("  --link: #0b5fd1;");
+    rules.push("  --rule: #d5dae1;");
+    rules.push("  --code-bg: #f1f3f6;");
+    rules.push("  --zebra: #f6f8fa;");
+    rules.push("  --quote: #9aa7b8;");
+    rules.push("}");
+    rules.push("@media (prefers-color-scheme: dark) {");
+    rules.push("  :root {");
+    rules.push("    --bg: #14181f;");
+    rules.push("    --fg: #dfe4ec;");
+    rules.push("    --muted: #9ba6b6;");
+    rules.push("    --link: #7db4ff;");
+    rules.push("    --rule: #323a47;");
+    rules.push("    --code-bg: #1e2430;");
+    rules.push("    --zebra: #191f28;");
+    rules.push("    --quote: #4d5b70;");
+    rules.push("  }");
+    rules.push("}");
+    rules.push("* { box-sizing: border-box; }");
+    rules.push("html { -webkit-text-size-adjust: 100%; }");
+    rules.push("body {");
+    rules.push("  max-width: 70ch;");
+    rules.push("  margin: 0 auto;");
+    rules.push("  padding: 2rem 1rem 4rem;");
+    rules.push("  background: var(--bg);");
+    rules.push("  color: var(--fg);");
+    rules.push("  font: 1rem/1.65 system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;");
+    rules.push("  overflow-wrap: break-word;");
+    rules.push("}");
+    rules.push("h1, h2, h3, h4, h5, h6 { margin: 2em 0 0.5em; line-height: 1.25; font-weight: 650; }");
+    rules.push("h1 { margin-top: 0; font-size: 2.1rem; }");
+    rules.push("h2 { font-size: 1.6rem; padding-bottom: 0.25em; border-bottom: 1px solid var(--rule); }");
+    rules.push("h3 { font-size: 1.3rem; }");
+    rules.push("h4 { font-size: 1.1rem; }");
+    rules.push("h5, h6 { font-size: 1rem; }");
+    rules.push("h6 { color: var(--muted); }");
+    rules.push("p, ul, ol, pre, blockquote, table { margin: 0 0 1em; }");
+    rules.push("a { color: var(--link); text-underline-offset: 0.15em; }");
+    rules.push("a:hover { text-decoration-thickness: 2px; }");
+    rules.push("ul, ol { padding-left: 1.6em; }");
+    rules.push("li > ul, li > ol { margin: 0.25em 0; }");
+    rules.push("li + li { margin-top: 0.25em; }");
+    rules.push("code, pre {");
+    rules.push("  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;");
+    rules.push("  font-size: 0.9em;");
+    rules.push("}");
+    rules.push("code { padding: 0.1em 0.35em; border-radius: 4px; background: var(--code-bg); }");
+    rules.push("pre {");
+    rules.push("  padding: 0.85em 1em;");
+    rules.push("  border-radius: 6px;");
+    rules.push("  background: var(--code-bg);");
+    rules.push("  overflow-x: auto;");
+    rules.push("  line-height: 1.45;");
+    rules.push("  tab-size: 4;");
+    rules.push("}");
+    rules.push("pre code { padding: 0; background: none; font-size: inherit; }");
+    rules.push("blockquote {");
+    rules.push("  padding: 0.1em 1em;");
+    rules.push("  border-left: 4px solid var(--quote);");
+    rules.push("  color: var(--muted);");
+    rules.push("}");
+    rules.push("blockquote > :last-child { margin-bottom: 0; }");
+    rules.push("hr { margin: 2em 0; border: 0; border-top: 1px solid var(--rule); }");
+    rules.push("img { max-width: 100%; height: auto; }");
+    rules.push("table {");
+    rules.push("  display: block;");
+    rules.push("  width: max-content;");
+    rules.push("  max-width: 100%;");
+    rules.push("  overflow-x: auto;");
+    rules.push("  border-collapse: collapse;");
+    rules.push("}");
+    rules.push("th, td { padding: 0.4em 0.8em; border: 1px solid var(--rule); text-align: start; }");
+    rules.push("th { font-weight: 650; background: var(--code-bg); }");
+    rules.push("tbody tr:nth-child(even) { background: var(--zebra); }");
+    rules.push("th[align=left], td[align=left] { text-align: left; }");
+    rules.push("th[align=center], td[align=center] { text-align: center; }");
+    rules.push("th[align=right], td[align=right] { text-align: right; }");
+    rules.push("@media (min-width: 40rem) {");
+    rules.push("  body { padding: 3rem 1.5rem 5rem; }");
+    rules.push("}");
+    rules.push("@media print {");
+    rules.push("  :root {");
+    rules.push("    --bg: #fff;");
+    rules.push("    --fg: #000;");
+    rules.push("    --muted: #333;");
+    rules.push("    --link: #000;");
+    rules.push("    --rule: #999;");
+    rules.push("    --code-bg: #f2f2f2;");
+    rules.push("    --zebra: #f7f7f7;");
+    rules.push("    --quote: #999;");
+    rules.push("  }");
+    rules.push("  body { max-width: none; padding: 0; font-size: 11pt; line-height: 1.45; }");
+    rules.push("  a { text-decoration: underline; }");
+    rules.push("  a[href^='http']::after { content: ' (' attr(href) ')'; font-size: 0.85em; word-break: break-all; }");
+    rules.push("  pre { white-space: pre-wrap; overflow: visible; }");
+    rules.push("  table { display: table; width: 100%; overflow: visible; }");
+    rules.push("  h1, h2, h3, h4, h5, h6 { break-after: avoid; }");
+    rules.push("  pre, blockquote, tr, img { break-inside: avoid; }");
+    rules.push("}");
+    return rules.join("\n") + "\n";
+}
+
+str style_element(str css) {
+    if (css.ends_with("\n")) {
+        return "<style>\n" + css + "</style>\n";
+    }
+    return "<style>\n" + css + "\n</style>\n";
+}
+
+str link_element(str url) {
+    return "<link rel=\"stylesheet\" href=\"" + MD_inlines.escape_href(url) + "\" />\n";
+}
+
+/// A whole document around `body`, an HTML fragment.
+///
+/// `title` is plain text and is escaped here. `theme` is one of the names
+/// `is_theme` accepts. `css_url` is an extra stylesheet to link, `css_text`
+/// one to inline (the caller has checked it with `can_inline`); each is ""
+/// when there is none, and both come after the theme's own CSS.
+pub str page(str body, str title, str theme, str css_url, str css_text) {
+    List<str> out = [];
+    out.push("<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\" />\n");
+    out.push("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n");
+    out.push("<title>" + html.escape(title) + "</title>\n");
+    if (theme == "default") {
+        out.push(style_element(stylesheet()));
+    } else if (theme == "bulma") {
+        out.push(link_element(BULMA_URL));
+    }
+    if (css_url.size() > 0) {
+        out.push(link_element(css_url));
+    }
+    if (css_text.size() > 0) {
+        out.push(style_element(css_text));
+    }
+    out.push("</head>\n<body>\n");
+    if (theme == "bulma") {
+        out.push("<main class=\"container\">\n<div class=\"content\">\n");
+    }
+    out.push(body);
+    if (body.size() > 0 && !body.ends_with("\n")) {
+        out.push("\n");
+    }
+    if (theme == "bulma") {
+        out.push("</div>\n</main>\n");
+    }
+    out.push("</body>\n</html>\n");
+    return out.join("");
+}

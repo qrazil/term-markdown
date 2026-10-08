@@ -71,8 +71,8 @@ bool is_href_safe(int character) {
     return HREF_SAFE.index_of(str.from_chars([character])).is_some();
 }
 
-// `destination` percent-encoded for an `href=".."` attribute.
-str escape_href(str destination) {
+/// `destination` percent-encoded for an `href=".."` attribute.
+pub str escape_href(str destination) {
     List<str> out = [];
     int length = destination.size();
     for (int i in 0 .. length) {

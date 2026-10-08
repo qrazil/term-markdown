@@ -2,6 +2,8 @@
 //
 //   markdown README.md               the HTML fragment, on standard output
 //   markdown --full --title T f.md   a whole document around it
+//   markdown --full --theme bulma f.md   ... styled by Bulma (a CDN link)
+//   markdown --full --css site.css f.md  ... plus a stylesheet of your own
 //   markdown --out page.html f.md    write there instead of standard output
 //   markdown                         reads standard input
 //
@@ -11,16 +13,12 @@
 // See README.md for what of CommonMark is in, what is out, and why.
 import args;
 import MD_blocks;
-import html;
+import MD_doc;
 import io;
 import os;
 import MD_render;
-
-// `source` as HTML. This is the whole program in one line; everything else here
-// is the command line and the files.
-str convert(str source) {
-    return MD_render.document(MD_blocks.parse(source));
-}
+import MD_theme;
+import MD_title;
 
 // Standard input, whole. `io.read_line_of` would do it a line at a time and
 // this program needs all of it anyway.
@@ -50,7 +48,34 @@ int fail(str why) {
     return 1;
 }
 
+// The extra stylesheet for `--css`, as the page wants it: (a URL to link,
+// CSS text to inline). One of them is "" and so, with no `--css`, is the other.
+Result<List<str>, str> extra_css(str reference) {
+    if (reference.size() == 0) {
+        return Result<List<str>, str>.Ok(["", ""]);
+    }
+    if (MD_theme.is_url(reference)) {
+        return Result<List<str>, str>.Ok([reference, ""]);
+    }
+    match (io.read(reference)) {
+        case Ok(str css): {
+            if (!MD_theme.can_inline(css)) {
+                return Result<List<str>, str>.Err("--css " + reference + ": contains </style, which would end the <style> element it is inlined in");
+            }
+            return Result<List<str>, str>.Ok(["", css]);
+        }
+        case Err(io.Error error): {
+            return Result<List<str>, str>.Err("--css " + reference + ": " + error.to_str());
+        }
+    }
+}
+
 int run(args.Parsed options) {
+    str theme = options.value("theme").or("default");
+    if (!MD_theme.is_theme(theme)) {
+        io.eprint("markdown: --theme " + theme + ": expected " + MD_theme.THEME_NAMES);
+        return 2;
+    }
     str input = options.optional("file");
     str source = "";
     if (input.size() == 0 || input == "-") {
@@ -72,10 +97,21 @@ int run(args.Parsed options) {
             }
         }
     }
-    str body = convert(source);
+    List<MD_doc.Block> tree = MD_blocks.parse(source);
+    str body = MD_render.document(tree);
     if (options.flag("full")) {
-        str title = options.value("title").or(input);
-        body = "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\" />\n<title>" + html.escape(title) + "</title>\n</head>\n<body>\n" + body + "</body>\n</html>\n";
+        str title = options.value("title").or("");
+        if (title.size() == 0) {
+            title = MD_title.default_title(tree, input);
+        }
+        match (extra_css(options.value("css").or(""))) {
+            case Ok(List<str> extra): {
+                body = MD_theme.page(body, title, theme, extra[0], extra[1]);
+            }
+            case Err(str why): {
+                return fail(why);
+            }
+        }
     }
     match (emit(body, options.value("out").or(""))) {
         case Ok(int written): {
@@ -92,7 +128,9 @@ int run(args.Parsed options) {
 
 args.Parser parser = args.Parser("markdown", summary: "CommonMark (a subset) to HTML");
 parser.flag("full", help: "wrap the output in a whole HTML document");
-parser.value("title", placeholder: "TEXT", help: "the <title> of a --full document");
+parser.value("title", placeholder: "TEXT", help: "the <title> of a --full document; default: the first # heading, else the file name");
+parser.value("theme", placeholder: "NAME", default: "default", help: "--full styling: default (built in, works offline), bulma (Bulma 1.x from a CDN) or none");
+parser.value("css", placeholder: "URL|PATH", help: "--full extra stylesheet: an http(s) URL is linked, a file is inlined; comes after the theme");
 parser.value("out", short: "o", placeholder: "PATH", help: "write here instead of standard output");
 parser.optional("file", "-", help: "the markdown to read; - or nothing is standard input");
 List<str> arguments = os.args();

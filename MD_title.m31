@@ -1,0 +1,131 @@
+// The title of a `--full` document when `--title` was not given: the text of
+// the first level-1 heading, else the file name without its extension, else
+// "Document".
+//
+// Plain text throughout; escaping is the page's job (`MD_theme.page`), done
+// once, so that a title is never escaped twice or not at all.
+import MD_doc;
+import MD_inlines;
+import text;
+
+const str FALLBACK = "Document";
+
+/// The title for a document read from `path` ("" or "-" for standard input)
+/// whose top-level blocks are `block_list`.
+pub str default_title(List<MD_doc.Block> block_list, str path) {
+    for (MD_doc.Block current_block in block_list) {
+        match (current_block) {
+            case Heading(MD_doc.Heading heading): {
+                if (heading.level == 1) {
+                    str heading_text = plain_text(MD_inlines.render(heading.text));
+                    if (heading_text.size() > 0) {
+                        return heading_text;
+                    }
+                }
+            }
+            case Rule: {
+            }
+            case Paragraph: {
+            }
+            case Fence: {
+            }
+            case Quoted: {
+            }
+            case Bullets: {
+            }
+            case Grid: {
+            }
+        }
+    }
+    str stem = file_stem(path);
+    if (stem.size() > 0) {
+        return stem;
+    }
+    return FALLBACK;
+}
+
+/// The last component of `path` without its last extension: `docs/a.b.md` is
+/// `a.b`. A leading dot is part of the name (`.md` has no extension), and
+/// standard input (`-`) has no name.
+pub str file_stem(str path) {
+    if (path == "-") {
+        return "";
+    }
+    List<str> parts = path.split("/");
+    str name = parts[parts.size() - 1];
+    List<str> pieces = name.split(".");
+    if (pieces.size() < 2) {
+        return name;
+    }
+    pieces.remove_at(pieces.size() - 1);
+    str stem = pieces.join(".");
+    if (stem.size() == 0) {
+        return name;
+    }
+    return stem;
+}
+
+/// `rendered`, one inline's HTML, as plain text: tags removed (an image
+/// leaves its `alt`), whitespace collapsed to single spaces, entities
+/// resolved. Only the five that `html.escape` writes can be there, because
+/// the inline parser decodes no others.
+pub str plain_text(str rendered) {
+    List<str> pieces = [];
+    int length = rendered.size();
+    int run_start = 0;
+    int index = 0;
+    while (index < length) {
+        if (rendered.byte_at(index) == '<') {
+            pieces.push(rendered.substr(run_start, index));
+            int tag_end = index;
+            while (tag_end < length && rendered.byte_at(tag_end) != '>') {
+                tag_end = tag_end + 1;
+            }
+            if (tag_end >= length) {
+                tag_end = length - 1;
+            }
+            pieces.push(image_alt(rendered.substr(index, tag_end + 1)));
+            index = tag_end;
+            run_start = tag_end + 1;
+        }
+        index = index + 1;
+    }
+    if (run_start < length) {
+        pieces.push(rendered.substr(run_start, length));
+    }
+    str flat = text.split_whitespace(pieces.join("")).join(" ");
+    return unescape(flat);
+}
+
+// The `alt` of an `<img ... />` tag, "" for any other tag.
+str image_alt(str tag) {
+    if (!tag.starts_with("<img ")) {
+        return "";
+    }
+    match (tag.index_of(" alt=\"")) {
+        case Some(int found): {
+            int from = found + 6;
+            match (tag.substr(from, tag.size()).index_of("\"")) {
+                case Some(int length): {
+                    return tag.substr(from, from + length);
+                }
+                case None: {
+                    return "";
+                }
+            }
+        }
+        case None: {
+            return "";
+        }
+    }
+}
+
+// The inverse of `html.escape`. `&amp;` goes last so that `&amp;lt;` becomes
+// `&lt;` and stops there.
+str unescape(str escaped) {
+    str result = text.replace(escaped, "&lt;", "<");
+    result = text.replace(result, "&gt;", ">");
+    result = text.replace(result, "&quot;", "\"");
+    result = text.replace(result, "&#x27;", "'");
+    return text.replace(result, "&amp;", "&");
+}
