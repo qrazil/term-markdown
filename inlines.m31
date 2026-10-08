@@ -25,33 +25,33 @@ import text;
 // by Unicode category. `é` and `字` are "other" here and there; U+00A0 and
 // `»` are "other" here and whitespace/punctuation there. See README.
 
-bool space_byte(int c) {
-    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == 11 || c == 12;
+bool space_byte(int character) {
+    return character == ' ' || character == '\t' || character == '\n' || character == '\r' || character == 11 || character == 12;
 }
 
-bool punct_byte(int c) {
-    if (c >= '!' && c <= '/') {
+bool punctuation_byte(int character) {
+    if (character >= '!' && character <= '/') {
         return true;
     }
-    if (c >= ':' && c <= '@') {
+    if (character >= ':' && character <= '@') {
         return true;
     }
-    if (c >= '[' && c <= '`') {
+    if (character >= '[' && character <= '`') {
         return true;
     }
-    return c >= '{' && c <= '~';
+    return character >= '{' && character <= '~';
 }
 
-bool alpha_byte(int c) {
-    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+bool alphabetic_byte(int character) {
+    return (character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z');
 }
 
-bool digit_byte(int c) {
-    return c >= '0' && c <= '9';
+bool digit_byte(int character) {
+    return character >= '0' && character <= '9';
 }
 
-bool alnum_byte(int c) {
-    return alpha_byte(c) || digit_byte(c);
+bool alphanumeric_byte(int character) {
+    return alphabetic_byte(character) || digit_byte(character);
 }
 
 // --- URL escaping ------------------------------------------------------------
@@ -64,29 +64,29 @@ bool alnum_byte(int c) {
 const str HREF_SAFE = "!#$%&'()*+,-./:;=?@_~`";
 const str HEX = "0123456789ABCDEF";
 
-bool href_safe(int c) {
-    if (alnum_byte(c)) {
+bool href_safe(int character) {
+    if (alphanumeric_byte(character)) {
         return true;
     }
-    return HREF_SAFE.index_of(str.from_chars([c])).is_some();
+    return HREF_SAFE.index_of(str.from_chars([character])).is_some();
 }
 
-// `dest` percent-encoded for an `href=".."` attribute.
-str escape_href(str dest) {
+// `destination` percent-encoded for an `href=".."` attribute.
+str escape_href(str destination) {
     List<str> out = [];
-    int n = dest.size();
-    for (int i in 0 .. n) {
-        int c = dest.byte_at(i);
-        if (c == '&') {
+    int length = destination.size();
+    for (int i in 0 .. length) {
+        int character = destination.byte_at(i);
+        if (character == '&') {
             out.push("&amp;");
-        } else if (c == '\'') {
+        } else if (character == '\'') {
             out.push("&#x27;");
-        } else if (href_safe(c)) {
-            out.push(dest.substr(i, i + 1));
+        } else if (href_safe(character)) {
+            out.push(destination.substr(i, i + 1));
         } else {
             out.push("%");
-            out.push(HEX.substr(c / 16, c / 16 + 1));
-            out.push(HEX.substr(c % 16, c % 16 + 1));
+            out.push(HEX.substr(character / 16, character / 16 + 1));
+            out.push(HEX.substr(character % 16, character % 16 + 1));
         }
     }
     return out.join("");
@@ -94,16 +94,16 @@ str escape_href(str dest) {
 
 // --- nodes -------------------------------------------------------------------
 
-// Either finished HTML (`delim` false, `out` is it) or an unresolved run of
-// `*` or `_`. `orig` is how many were written, `count` how many are still
+// Either finished HTML (`delimiter` false, `out` is it) or an unresolved run of
+// `*` or `_`. `original` is how many were written, `count` how many are still
 // unpaired; `open_tags` grows leftwards and `close_tags` rightwards as the
 // second pass hangs tags on the run, which is the order that makes
 // `***x***` come out `<em><strong>x</strong></em>`.
 type Node {
-    bool delim;
+    bool delimiter;
     str out;
-    int ch;
-    int orig;
+    int character;
+    int original;
     int count;
     // What the flanking rules said when the run was scanned. These never
     // change: the rule of three asks what a run IS, not what is left of it.
@@ -117,16 +117,16 @@ type Node {
     str close_tags;
 }
 
-Node html_node(str h) {
-    return Node(false, h, 0, 0, 0, false, false, false, "", "");
+Node html_node(str markup) {
+    return Node(false, markup, 0, 0, 0, false, false, false, "", "");
 }
 
-Node delim_node(int c, int len, bool opens, bool closes) {
-    return Node(true, "", c, len, len, opens, closes, false, "", "");
+Node delimiter_node(int character, int length, bool opens, bool closes) {
+    return Node(true, "", character, length, length, opens, closes, false, "", "");
 }
 
-str mark_of(int c) {
-    if (c == '*') {
+str mark_of(int character) {
+    if (character == '*') {
         return "*";
     }
     return "_";
@@ -134,25 +134,25 @@ str mark_of(int c) {
 
 // --- the scan ----------------------------------------------------------------
 
-/// `s`, a block's raw inline source, as the HTML that goes inside its element.
-pub str render(str s) {
-    return render_at(s, 0);
+/// `source`, a block's raw inline source, as the HTML that goes inside its element.
+pub str render(str source) {
+    return render_at(source, 0);
 }
 
 // The same, with the plain text only: every tag removed. This is what an
 // image's `alt` attribute holds, and rendering then stripping is how the
 // literal-vs-emphasis question is answered without a second parser.
-str plain(str s) {
-    return strip_tags(render_at(s, 0));
+str plain(str source) {
+    return strip_tags(render_at(source, 0));
 }
 
-str render_at(str s, int depth) {
-    List<Node> ns = scan(s, brackets(s), depth);
-    emphasis(ns);
-    return emit(ns);
+str render_at(str source, int depth) {
+    List<Node> nodes = scan(source, brackets(source), depth);
+    emphasis(nodes);
+    return emit(nodes);
 }
 
-// For every `[` in `s`, the offset of the `]` that closes it, or -1. An empty
+// For every `[` in `source`, the offset of the `]` that closes it, or -1. An empty
 // list means there is no `[` at all.
 //
 // One pass with a stack, which is the whole reason this exists: searching
@@ -163,256 +163,256 @@ str render_at(str s, int depth) {
 //
 // A backslash escapes a bracket and a code span hides one, so a `]` inside
 // a code span does not close the link that contains it.
-List<int> brackets(str s) {
-    int n = s.size();
-    if (s.index_of("[").is_none()) {
+List<int> brackets(str source) {
+    int length = source.size();
+    if (source.index_of("[").is_none()) {
         return [];
     }
-    List<int> shut = [-1; n];
+    List<int> shut = [-1; length];
     List<int> open = [];
-    int i = 0;
-    while (i < n) {
-        int c = s.byte_at(i);
-        if (c == '\\') {
-            i = i + 2;
+    int index = 0;
+    while (index < length) {
+        int character = source.byte_at(index);
+        if (character == '\\') {
+            index = index + 2;
             continue;
         }
-        if (c == '`') {
-            i = skip_code(s, i);
+        if (character == '`') {
+            index = skip_code(source, index);
             continue;
         }
-        if (c == '[') {
-            open.push(i);
-        } else if (c == ']' && open.size() > 0) {
-            shut[open.pop()] = i;
+        if (character == '[') {
+            open.push(index);
+        } else if (character == ']' && open.size() > 0) {
+            shut[open.pop()] = index;
         }
-        i = i + 1;
+        index = index + 1;
     }
     return shut;
 }
 
-List<Node> scan(str s, List<int> shut, int depth) {
-    List<Node> ns = [];
-    int n = s.size();
-    int i = 0;
+List<Node> scan(str source, List<int> shut, int depth) {
+    List<Node> nodes = [];
+    int length = source.size();
+    int index = 0;
     int from = 0;
-    while (i < n) {
-        int c = s.byte_at(i);
-        if (c == '\\') {
+    while (index < length) {
+        int character = source.byte_at(index);
+        if (character == '\\') {
             // A backslash escapes ASCII punctuation, and ends a line hard.
-            if (i + 1 < n && s.byte_at(i + 1) == '\n') {
-                flush(ns, s, from, i);
-                ns.push(html_node("<br />\n"));
-                i = i + 2;
-                i = skip_indent(s, i);
-                from = i;
+            if (index + 1 < length && source.byte_at(index + 1) == '\n') {
+                flush(nodes, source, from, index);
+                nodes.push(html_node("<br />\n"));
+                index = index + 2;
+                index = skip_indent(source, index);
+                from = index;
                 continue;
             }
-            if (i + 1 < n && punct_byte(s.byte_at(i + 1))) {
-                flush(ns, s, from, i);
-                ns.push(html_node(html.escape(s.substr(i + 1, i + 2))));
-                i = i + 2;
-                from = i;
+            if (index + 1 < length && punctuation_byte(source.byte_at(index + 1))) {
+                flush(nodes, source, from, index);
+                nodes.push(html_node(html.escape(source.substr(index + 1, index + 2))));
+                index = index + 2;
+                from = index;
                 continue;
             }
-            i = i + 1;
+            index = index + 1;
             continue;
         }
-        if (c == '`') {
-            int after = code_span(ns, s, i, from);
-            if (after > i) {
-                i = after;
-                from = i;
+        if (character == '`') {
+            int after = code_span(nodes, source, index, from);
+            if (after > index) {
+                index = after;
+                from = index;
                 continue;
             }
             // Not a span: the run is literal, and skipping it whole stops the
             // next backtick from opening one inside it.
-            int j = i;
-            while (j < n && s.byte_at(j) == '`') {
-                j = j + 1;
+            int run_end = index;
+            while (run_end < length && source.byte_at(run_end) == '`') {
+                run_end = run_end + 1;
             }
-            i = j;
+            index = run_end;
             continue;
         }
-        if (c == '<') {
-            int after = autolink(ns, s, i, from);
-            if (after > i) {
-                i = after;
-                from = i;
+        if (character == '<') {
+            int after = autolink(nodes, source, index, from);
+            if (after > index) {
+                index = after;
+                from = index;
                 continue;
             }
-            i = i + 1;
+            index = index + 1;
             continue;
         }
-        if (c == '[' || c == '!' && i + 1 < n && s.byte_at(i + 1) == '[') {
-            int after = link(ns, s, shut, i, from, depth);
-            if (after > i) {
-                i = after;
-                from = i;
+        if (character == '[' || character == '!' && index + 1 < length && source.byte_at(index + 1) == '[') {
+            int after = link(nodes, source, shut, index, from, depth);
+            if (after > index) {
+                index = after;
+                from = index;
                 continue;
             }
-            i = i + 1;
+            index = index + 1;
             continue;
         }
-        if (c == '\n') {
+        if (character == '\n') {
             // A line break. Two or more trailing spaces make it hard; the
             // trailing spaces go either way, and so does the next line's
             // indent.
-            int back = i;
-            while (back > from && s.byte_at(back - 1) == ' ') {
+            int back = index;
+            while (back > from && source.byte_at(back - 1) == ' ') {
                 back = back - 1;
             }
-            flush(ns, s, from, back);
-            if (i - back >= 2) {
-                ns.push(html_node("<br />\n"));
+            flush(nodes, source, from, back);
+            if (index - back >= 2) {
+                nodes.push(html_node("<br />\n"));
             } else {
-                ns.push(html_node("\n"));
+                nodes.push(html_node("\n"));
             }
-            i = skip_indent(s, i + 1);
-            from = i;
+            index = skip_indent(source, index + 1);
+            from = index;
             continue;
         }
-        if (c == '*' || c == '_') {
-            int j = i;
-            while (j < n && s.byte_at(j) == c) {
-                j = j + 1;
+        if (character == '*' || character == '_') {
+            int run_end = index;
+            while (run_end < length && source.byte_at(run_end) == character) {
+                run_end = run_end + 1;
             }
-            flush(ns, s, from, i);
-            ns.push(run_at(s, i, j, c));
-            i = j;
-            from = i;
+            flush(nodes, source, from, index);
+            nodes.push(run_at(source, index, run_end, character));
+            index = run_end;
+            from = index;
             continue;
         }
-        i = i + 1;
+        index = index + 1;
     }
-    flush(ns, s, from, n);
-    return ns;
+    flush(nodes, source, from, length);
+    return nodes;
 }
 
-void flush(List<Node> ns, str s, int from, int to) {
-    if (to > from) {
-        ns.push(html_node(html.escape(s.substr(from, to))));
+void flush(List<Node> nodes, str source, int from, int stop) {
+    if (stop > from) {
+        nodes.push(html_node(html.escape(source.substr(from, stop))));
     }
 }
 
-int skip_indent(str s, int at) {
-    int n = s.size();
-    int i = at;
-    while (i < n && (s.byte_at(i) == ' ' || s.byte_at(i) == '\t')) {
-        i = i + 1;
+int skip_indent(str source, int start) {
+    int length = source.size();
+    int index = start;
+    while (index < length && (source.byte_at(index) == ' ' || source.byte_at(index) == '\t')) {
+        index = index + 1;
     }
-    return i;
+    return index;
 }
 
-// The delimiter run `s[i..j)` of `c`, classified. The rules are CommonMark's
+// The delimiter run `source[start..stop)` of `character`, classified. The rules are CommonMark's
 // left-flanking and right-flanking, over the byte before and the byte after.
-Node run_at(str s, int i, int j, int c) {
+Node run_at(str source, int start, int stop, int character) {
     int before = 32;
-    if (i > 0) {
-        before = s.byte_at(i - 1);
+    if (start > 0) {
+        before = source.byte_at(start - 1);
     }
     int after = 32;
-    if (j < s.size()) {
-        after = s.byte_at(j);
+    if (stop < source.size()) {
+        after = source.byte_at(stop);
     }
-    bool bw = space_byte(before);
-    bool bp = punct_byte(before);
-    bool aw = space_byte(after);
-    bool ap = punct_byte(after);
-    bool left = !aw && (!ap || bw || bp);
-    bool right = !bw && (!bp || aw || ap);
-    if (c == '_') {
-        return delim_node(c, j - i, left && (!right || bp), right && (!left || ap));
+    bool before_space = space_byte(before);
+    bool before_punctuation = punctuation_byte(before);
+    bool after_space = space_byte(after);
+    bool after_punctuation = punctuation_byte(after);
+    bool left = !after_space && (!after_punctuation || before_space || before_punctuation);
+    bool right = !before_space && (!before_punctuation || after_space || after_punctuation);
+    if (character == '_') {
+        return delimiter_node(character, stop - start, left && (!right || before_punctuation), right && (!left || after_punctuation));
     }
-    return delim_node(c, j - i, left, right);
+    return delimiter_node(character, stop - start, left, right);
 }
 
 // --- code spans --------------------------------------------------------------
 
-// Returns the offset just past the span, or `i` if the backtick run at `i`
+// Returns the offset just past the span, or `start` if the backtick run at `start`
 // opens nothing.
-int code_span(List<Node> ns, str s, int i, int from) {
-    int n = s.size();
-    int j = i;
-    while (j < n && s.byte_at(j) == '`') {
-        j = j + 1;
+int code_span(List<Node> nodes, str source, int start, int from) {
+    int length = source.size();
+    int run_end = start;
+    while (run_end < length && source.byte_at(run_end) == '`') {
+        run_end = run_end + 1;
     }
-    int want = j - i;
-    int k = j;
+    int want = run_end - start;
+    int cursor = run_end;
     int found = -1;
-    while (k < n && found < 0) {
-        if (s.byte_at(k) == '`') {
-            int m = k;
-            while (m < n && s.byte_at(m) == '`') {
-                m = m + 1;
+    while (cursor < length && found < 0) {
+        if (source.byte_at(cursor) == '`') {
+            int close_end = cursor;
+            while (close_end < length && source.byte_at(close_end) == '`') {
+                close_end = close_end + 1;
             }
-            if (m - k == want) {
-                found = k;
+            if (close_end - cursor == want) {
+                found = cursor;
             } else {
-                k = m;
+                cursor = close_end;
             }
         } else {
-            k = k + 1;
+            cursor = cursor + 1;
         }
     }
     if (found < 0) {
-        return i;
+        return start;
     }
-    str body = text.replace(s.substr(j, found), "\n", " ");
+    str body = text.replace(source.substr(run_end, found), "\n", " ");
     if (body.size() >= 2 && body.starts_with(" ") && body.ends_with(" ") && body.trim().size() > 0) {
         body = body.substr(1, body.size() - 1);
     }
-    flush(ns, s, from, i);
-    ns.push(html_node("<code>" + html.escape(body) + "</code>"));
+    flush(nodes, source, from, start);
+    nodes.push(html_node("<code>" + html.escape(body) + "</code>"));
     return found + want;
 }
 
 // --- autolinks ---------------------------------------------------------------
 
-int autolink(List<Node> ns, str s, int i, int from) {
-    int n = s.size();
-    int j = i + 1;
-    while (j < n) {
-        int c = s.byte_at(j);
-        if (c == '>') {
+int autolink(List<Node> nodes, str source, int start, int from) {
+    int length = source.size();
+    int stop = start + 1;
+    while (stop < length) {
+        int character = source.byte_at(stop);
+        if (character == '>') {
             break;
         }
-        if (c == '<' || space_byte(c)) {
-            return i;
+        if (character == '<' || space_byte(character)) {
+            return start;
         }
-        j = j + 1;
+        stop = stop + 1;
     }
-    if (j >= n) {
-        return i;
+    if (stop >= length) {
+        return start;
     }
-    str body = s.substr(i + 1, j);
+    str body = source.substr(start + 1, stop);
     if (is_uri(body)) {
-        flush(ns, s, from, i);
-        ns.push(html_node("<a href=\"" + escape_href(body) + "\">" + html.escape(body) + "</a>"));
-        return j + 1;
+        flush(nodes, source, from, start);
+        nodes.push(html_node("<a href=\"" + escape_href(body) + "\">" + html.escape(body) + "</a>"));
+        return stop + 1;
     }
     if (is_email(body)) {
-        flush(ns, s, from, i);
-        ns.push(html_node("<a href=\"mailto:" + escape_href(body) + "\">" + html.escape(body) + "</a>"));
-        return j + 1;
+        flush(nodes, source, from, start);
+        nodes.push(html_node("<a href=\"mailto:" + escape_href(body) + "\">" + html.escape(body) + "</a>"));
+        return stop + 1;
     }
-    return i;
+    return start;
 }
 
 // `scheme:rest`, where the scheme is 2 to 32 characters starting with a
 // letter. The characters that would have ended the scan -- space, `<`, `>` --
 // are already gone.
 bool is_uri(str body) {
-    int n = body.size();
-    if (n == 0 || !alpha_byte(body.byte_at(0))) {
+    int length = body.size();
+    if (length == 0 || !alphabetic_byte(body.byte_at(0))) {
         return false;
     }
-    for (int i in 1 .. n) {
-        int c = body.byte_at(i);
-        if (c == ':') {
+    for (int i in 1 .. length) {
+        int character = body.byte_at(i);
+        if (character == ':') {
             return i >= 2 && i <= 32;
         }
-        if (!alnum_byte(c) && c != '+' && c != '-' && c != '.') {
+        if (!alphanumeric_byte(character) && character != '+' && character != '-' && character != '.') {
             return false;
         }
     }
@@ -420,22 +420,22 @@ bool is_uri(str body) {
 }
 
 bool is_email(str body) {
-    Option<int> at = body.index_of("@");
-    match (at) {
+    Option<int> at_sign = body.index_of("@");
+    match (at_sign) {
         case None: {
             return false;
         }
-        case Some(int k): {
-            if (k == 0 || k + 1 >= body.size()) {
+        case Some(int at_index): {
+            if (at_index == 0 || at_index + 1 >= body.size()) {
                 return false;
             }
-            for (int i in 0 .. k) {
-                int c = body.byte_at(i);
-                if (!alnum_byte(c) && MAIL_LOCAL.index_of(str.from_chars([c])).is_none()) {
+            for (int i in 0 .. at_index) {
+                int character = body.byte_at(i);
+                if (!alphanumeric_byte(character) && MAIL_LOCAL.index_of(str.from_chars([character])).is_none()) {
                     return false;
                 }
             }
-            return labels_ok(body.substr(k + 1, body.size()));
+            return labels_ok(body.substr(at_index + 1, body.size()));
         }
     }
 }
@@ -444,20 +444,20 @@ const str MAIL_LOCAL = ".!#$%&'*+/=?^_`{|}~-";
 
 bool labels_ok(str host) {
     for (str label in host.split(".")) {
-        int n = label.size();
-        if (n == 0 || n > 63) {
+        int length = label.size();
+        if (length == 0 || length > 63) {
             return false;
         }
-        if (!alnum_byte(label.byte_at(0)) || !alnum_byte(label.byte_at(n - 1))) {
+        if (!alphanumeric_byte(label.byte_at(0)) || !alphanumeric_byte(label.byte_at(length - 1))) {
             return false;
         }
-        int i = 1;
-        while (i < n - 1) {
-            int c = label.byte_at(i);
-            if (!alnum_byte(c) && c != '-') {
+        int index = 1;
+        while (index < length - 1) {
+            int character = label.byte_at(index);
+            if (!alphanumeric_byte(character) && character != '-') {
                 return false;
             }
-            i = i + 1;
+            index = index + 1;
         }
     }
     return host.size() > 0;
@@ -467,219 +467,219 @@ bool labels_ok(str host) {
 
 // What a `(dest "title")` clause came to.
 type Target {
-    bool ok;
+    bool valid;
     str href;
     str title;
-    int at;
+    int after;
 }
 
-int link(List<Node> ns, str s, List<int> shuts, int i, int from, int depth) {
+int link(List<Node> nodes, str source, List<int> shuts, int start, int from, int depth) {
     int bang = 0;
-    if (s.byte_at(i) == '!') {
+    if (source.byte_at(start) == '!') {
         bang = 1;
     }
     // A link may not hold another link, so inside one a `[` is literal. An
     // image may, because its content becomes plain text either way.
     if (bang == 0 && depth > 0) {
-        return i;
+        return start;
     }
-    int open = i + bang;
+    int open = start + bang;
     if (open >= shuts.size()) {
-        return i;
+        return start;
     }
     int shut = shuts[open];
-    if (shut < 0 || shut + 1 >= s.size() || s.byte_at(shut + 1) != '(') {
-        return i;
+    if (shut < 0 || shut + 1 >= source.size() || source.byte_at(shut + 1) != '(') {
+        return start;
     }
-    Target t = target(s, shut + 2);
-    if (!t.ok) {
-        return i;
+    Target clause = target(source, shut + 2);
+    if (!clause.valid) {
+        return start;
     }
-    str inner = s.substr(open + 1, shut);
-    flush(ns, s, from, i);
+    str inner = source.substr(open + 1, shut);
+    flush(nodes, source, from, start);
     List<str> out = [];
     if (bang == 1) {
         out.push("<img src=\"");
-        out.push(escape_href(t.href));
+        out.push(escape_href(clause.href));
         out.push("\" alt=\"");
         out.push(plain(inner));
         out.push("\"");
-        if (t.title.size() > 0) {
+        if (clause.title.size() > 0) {
             out.push(" title=\"");
-            out.push(html.escape(t.title));
+            out.push(html.escape(clause.title));
             out.push("\"");
         }
         out.push(" />");
     } else {
         out.push("<a href=\"");
-        out.push(escape_href(t.href));
+        out.push(escape_href(clause.href));
         out.push("\"");
-        if (t.title.size() > 0) {
+        if (clause.title.size() > 0) {
             out.push(" title=\"");
-            out.push(html.escape(t.title));
+            out.push(html.escape(clause.title));
             out.push("\"");
         }
         out.push(">");
         out.push(render_at(inner, depth + 1));
         out.push("</a>");
     }
-    ns.push(html_node(out.join("")));
-    return t.at;
+    nodes.push(html_node(out.join("")));
+    return clause.after;
 }
 
-int skip_code(str s, int i) {
-    int n = s.size();
-    int j = i;
-    while (j < n && s.byte_at(j) == '`') {
-        j = j + 1;
+int skip_code(str source, int start) {
+    int length = source.size();
+    int run_end = start;
+    while (run_end < length && source.byte_at(run_end) == '`') {
+        run_end = run_end + 1;
     }
-    int want = j - i;
-    int k = j;
-    while (k < n) {
-        if (s.byte_at(k) == '`') {
-            int m = k;
-            while (m < n && s.byte_at(m) == '`') {
-                m = m + 1;
+    int want = run_end - start;
+    int cursor = run_end;
+    while (cursor < length) {
+        if (source.byte_at(cursor) == '`') {
+            int close_end = cursor;
+            while (close_end < length && source.byte_at(close_end) == '`') {
+                close_end = close_end + 1;
             }
-            if (m - k == want) {
-                return m;
+            if (close_end - cursor == want) {
+                return close_end;
             }
-            k = m;
+            cursor = close_end;
         } else {
-            k = k + 1;
+            cursor = cursor + 1;
         }
     }
-    return j;
+    return run_end;
 }
 
-// `(dest)`, `(dest "title")`, `()` -- `at` is just past the `(`.
-Target target(str s, int at) {
-    int n = s.size();
-    int i = skip_ws(s, at);
+// `(dest)`, `(dest "title")`, `()` -- `start` is just past the `(`.
+Target target(str source, int start) {
+    int length = source.size();
+    int cursor = skip_whitespace(source, start);
     str href = "";
-    if (i < n && s.byte_at(i) == '<') {
-        int j = i + 1;
-        while (j < n && s.byte_at(j) != '>' && s.byte_at(j) != '\n') {
-            if (s.byte_at(j) == '\\') {
-                j = j + 1;
+    if (cursor < length && source.byte_at(cursor) == '<') {
+        int stop = cursor + 1;
+        while (stop < length && source.byte_at(stop) != '>' && source.byte_at(stop) != '\n') {
+            if (source.byte_at(stop) == '\\') {
+                stop = stop + 1;
             }
-            j = j + 1;
+            stop = stop + 1;
         }
-        if (j >= n || s.byte_at(j) != '>') {
-            return Target(false, "", "", at);
+        if (stop >= length || source.byte_at(stop) != '>') {
+            return Target(false, "", "", start);
         }
-        href = unescape(s.substr(i + 1, j));
-        i = j + 1;
+        href = unescape(source.substr(cursor + 1, stop));
+        cursor = stop + 1;
     } else {
-        int j = i;
+        int stop = cursor;
         int depth = 0;
-        while (j < n) {
-            int c = s.byte_at(j);
-            if (c == '\\' && j + 1 < n) {
-                j = j + 2;
+        while (stop < length) {
+            int character = source.byte_at(stop);
+            if (character == '\\' && stop + 1 < length) {
+                stop = stop + 2;
                 continue;
             }
-            if (space_byte(c)) {
+            if (space_byte(character)) {
                 break;
             }
-            if (c == '(') {
+            if (character == '(') {
                 depth = depth + 1;
-            } else if (c == ')') {
+            } else if (character == ')') {
                 if (depth == 0) {
                     break;
                 }
                 depth = depth - 1;
             }
-            j = j + 1;
+            stop = stop + 1;
         }
-        href = unescape(s.substr(i, j));
-        i = j;
+        href = unescape(source.substr(cursor, stop));
+        cursor = stop;
     }
-    int k = skip_ws(s, i);
+    int probe = skip_whitespace(source, cursor);
     str title = "";
-    if (k > i || k < n && s.byte_at(k) == ')') {
-        if (k < n && (s.byte_at(k) == '"' || s.byte_at(k) == '\'' || s.byte_at(k) == '(')) {
+    if (probe > cursor || probe < length && source.byte_at(probe) == ')') {
+        if (probe < length && (source.byte_at(probe) == '"' || source.byte_at(probe) == '\'' || source.byte_at(probe) == '(')) {
             int shut = 34;
-            if (s.byte_at(k) == '\'') {
+            if (source.byte_at(probe) == '\'') {
                 shut = 39;
             }
-            if (s.byte_at(k) == '(') {
+            if (source.byte_at(probe) == '(') {
                 shut = 41;
             }
-            int j = k + 1;
-            while (j < n && s.byte_at(j) != shut) {
-                if (s.byte_at(j) == '\\') {
-                    j = j + 1;
+            int stop = probe + 1;
+            while (stop < length && source.byte_at(stop) != shut) {
+                if (source.byte_at(stop) == '\\') {
+                    stop = stop + 1;
                 }
-                j = j + 1;
+                stop = stop + 1;
             }
-            if (j >= n) {
-                return Target(false, "", "", at);
+            if (stop >= length) {
+                return Target(false, "", "", start);
             }
-            title = unescape(s.substr(k + 1, j));
-            k = skip_ws(s, j + 1);
+            title = unescape(source.substr(probe + 1, stop));
+            probe = skip_whitespace(source, stop + 1);
         }
     }
-    if (k >= n || s.byte_at(k) != ')') {
-        return Target(false, "", "", at);
+    if (probe >= length || source.byte_at(probe) != ')') {
+        return Target(false, "", "", start);
     }
-    return Target(true, href, title, k + 1);
+    return Target(true, href, title, probe + 1);
 }
 
-int skip_ws(str s, int at) {
-    int n = s.size();
-    int i = at;
-    while (i < n && space_byte(s.byte_at(i))) {
-        i = i + 1;
+int skip_whitespace(str source, int start) {
+    int length = source.size();
+    int index = start;
+    while (index < length && space_byte(source.byte_at(index))) {
+        index = index + 1;
     }
-    return i;
+    return index;
 }
 
 // Backslash escapes resolved, for text that is about to become an attribute
 // rather than inline content.
-str unescape(str s) {
-    if (s.index_of("\\").is_none()) {
-        return s;
+str unescape(str source) {
+    if (source.index_of("\\").is_none()) {
+        return source;
     }
     List<str> out = [];
-    int n = s.size();
-    int i = 0;
+    int length = source.size();
+    int index = 0;
     int from = 0;
-    while (i < n) {
-        if (s.byte_at(i) == '\\' && i + 1 < n && punct_byte(s.byte_at(i + 1))) {
-            out.push(s.substr(from, i));
-            i = i + 1;
-            from = i;
+    while (index < length) {
+        if (source.byte_at(index) == '\\' && index + 1 < length && punctuation_byte(source.byte_at(index + 1))) {
+            out.push(source.substr(from, index));
+            index = index + 1;
+            from = index;
         }
-        i = i + 1;
+        index = index + 1;
     }
-    out.push(s.substr(from, n));
+    out.push(source.substr(from, length));
     return out.join("");
 }
 
-str strip_tags(str s) {
-    if (s.index_of("<").is_none()) {
-        return s;
+str strip_tags(str source) {
+    if (source.index_of("<").is_none()) {
+        return source;
     }
     List<str> out = [];
-    int n = s.size();
-    int i = 0;
+    int length = source.size();
+    int index = 0;
     int from = 0;
-    while (i < n) {
-        if (s.byte_at(i) == '<') {
-            out.push(s.substr(from, i));
-            while (i < n && s.byte_at(i) != '>') {
-                i = i + 1;
+    while (index < length) {
+        if (source.byte_at(index) == '<') {
+            out.push(source.substr(from, index));
+            while (index < length && source.byte_at(index) != '>') {
+                index = index + 1;
             }
-            if (i < n) {
-                i = i + 1;
+            if (index < length) {
+                index = index + 1;
             }
-            from = i;
+            from = index;
         } else {
-            i = i + 1;
+            index = index + 1;
         }
     }
-    out.push(s.substr(from, n));
+    out.push(source.substr(from, length));
     return out.join("");
 }
 
@@ -700,113 +700,113 @@ str strip_tags(str s) {
 //
 // A matched pair spends two delimiters if both runs have two, otherwise one,
 // and everything still on the stack between the pair comes off it.
-void emphasis(List<Node> ns) {
-    List<int> ds = [];
-    for (int at in 0 .. ns.size()) {
-        if (ns[at].delim) {
-            ds.push(at);
+void emphasis(List<Node> nodes) {
+    List<int> delimiters = [];
+    for (int i in 0 .. nodes.size()) {
+        if (nodes[i].delimiter) {
+            delimiters.push(i);
         }
     }
     // One bottom per delimiter character: -1 is the bottom of the stack.
     int bottom_star = -1;
     int bottom_score = -1;
-    int p = 0;
-    while (p < ds.size()) {
-        Node cn = ns[ds[p]];
-        if (cn.dead || !cn.closer) {
-            p = p + 1;
+    int closer_slot = 0;
+    while (closer_slot < delimiters.size()) {
+        Node closing_node = nodes[delimiters[closer_slot]];
+        if (closing_node.dead || !closing_node.closer) {
+            closer_slot = closer_slot + 1;
             continue;
         }
         int bottom = bottom_star;
-        if (cn.ch == 95) {
+        if (closing_node.character == 95) {
             bottom = bottom_score;
         }
-        int prev = alive_before(ns, ds, p);
-        int q = p - 1;
+        int previous = alive_before(nodes, delimiters, closer_slot);
+        int opener_slot = closer_slot - 1;
         int found = -1;
         bool odd = false;
-        while (q >= 0 && found < 0) {
-            Node on = ns[ds[q]];
-            if (on.dead) {
-                q = q - 1;
+        while (opener_slot >= 0 && found < 0) {
+            Node opening_node = nodes[delimiters[opener_slot]];
+            if (opening_node.dead) {
+                opener_slot = opener_slot - 1;
                 continue;
             }
-            if (ds[q] == bottom) {
-                q = -1;
+            if (delimiters[opener_slot] == bottom) {
+                opener_slot = -1;
                 continue;
             }
-            odd = (cn.opener || on.closer) && cn.orig % 3 != 0 && (on.orig + cn.orig) % 3 == 0;
-            if (on.ch == cn.ch && on.opener && !odd) {
-                found = q;
+            odd = (closing_node.opener || opening_node.closer) && closing_node.original % 3 != 0 && (opening_node.original + closing_node.original) % 3 == 0;
+            if (opening_node.character == closing_node.character && opening_node.opener && !odd) {
+                found = opener_slot;
             } else {
-                q = q - 1;
+                opener_slot = opener_slot - 1;
             }
         }
         if (found < 0) {
-            p = p + 1;
+            closer_slot = closer_slot + 1;
             if (!odd) {
-                if (cn.ch == 95) {
-                    bottom_score = prev;
+                if (closing_node.character == 95) {
+                    bottom_score = previous;
                 } else {
-                    bottom_star = prev;
+                    bottom_star = previous;
                 }
-                if (!cn.opener) {
-                    cn.dead = true;
+                if (!closing_node.opener) {
+                    closing_node.dead = true;
                 }
             }
             continue;
         }
-        Node on = ns[ds[found]];
+        Node opening_node = nodes[delimiters[found]];
         int use = 1;
-        if (cn.count >= 2 && on.count >= 2) {
+        if (closing_node.count >= 2 && opening_node.count >= 2) {
             use = 2;
         }
-        on.count = on.count - use;
-        cn.count = cn.count - use;
+        opening_node.count = opening_node.count - use;
+        closing_node.count = closing_node.count - use;
         if (use == 2) {
-            on.open_tags = "<strong>" + on.open_tags;
-            cn.close_tags = cn.close_tags + "</strong>";
+            opening_node.open_tags = "<strong>" + opening_node.open_tags;
+            closing_node.close_tags = closing_node.close_tags + "</strong>";
         } else {
-            on.open_tags = "<em>" + on.open_tags;
-            cn.close_tags = cn.close_tags + "</em>";
+            opening_node.open_tags = "<em>" + opening_node.open_tags;
+            closing_node.close_tags = closing_node.close_tags + "</em>";
         }
-        for (int k in found + 1 .. p) {
-            ns[ds[k]].dead = true;
+        for (int slot in found + 1 .. closer_slot) {
+            nodes[delimiters[slot]].dead = true;
         }
-        if (on.count == 0) {
-            on.dead = true;
+        if (opening_node.count == 0) {
+            opening_node.dead = true;
         }
-        if (cn.count == 0) {
-            cn.dead = true;
-            p = p + 1;
+        if (closing_node.count == 0) {
+            closing_node.dead = true;
+            closer_slot = closer_slot + 1;
         }
     }
 }
 
-// The node index of the nearest delimiter still on the stack before `p`, or
+// The node index of the nearest delimiter still on the stack before `closer_slot`, or
 // -1 for the bottom of it.
-int alive_before(List<Node> ns, List<int> ds, int p) {
-    int q = p - 1;
-    while (q >= 0) {
-        if (!ns[ds[q]].dead) {
-            return ds[q];
+int alive_before(List<Node> nodes, List<int> delimiters, int closer_slot) {
+    int opener_slot = closer_slot - 1;
+    while (opener_slot >= 0) {
+        if (!nodes[delimiters[opener_slot]].dead) {
+            return delimiters[opener_slot];
         }
-        q = q - 1;
+        opener_slot = opener_slot - 1;
     }
     return -1;
 }
 
-str emit(List<Node> ns) {
+str emit(List<Node> nodes) {
     List<str> out = [];
-    for (Node nd in ns) {
-        if (nd.delim) {
-            out.push(nd.close_tags);
-            if (nd.count > 0) {
-                out.push(mark_of(nd.ch).repeat(nd.count));
+    for (Node node in nodes) {
+        if (node.delimiter) {
+            out.push(node.close_tags);
+            if (node.count > 0) {
+                out.push(mark_of(node.character).repeat(node.count));
             }
-            out.push(nd.open_tags);
+            out.push(node.open_tags);
         } else {
-            out.push(nd.out);
+            out.push(node.out);
         }
     }
     return out.join("");
