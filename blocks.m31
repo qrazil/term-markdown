@@ -310,7 +310,7 @@ List<doc.Block> parse_lines(List<str> lines) {
         }
         int level = atx_level(r);
         if (level > 0) {
-            out.push(doc.Block.Head(doc.Heading(level, atx_text(r, level))));
+            out.push(doc.Block.Heading(doc.Heading(level, atx_text(r, level))));
             i = i + 1;
             continue;
         }
@@ -448,7 +448,7 @@ int paragraph(List<doc.Block> out, List<str> lines, int at) {
         int li = indent_of(line);
         str r = chop(line, li);
         if (li < 4 && para.size() > 0 && setext_level(r) > 0) {
-            out.push(doc.Block.Head(doc.Heading(setext_level(r), para.join("\n").trim())));
+            out.push(doc.Block.Heading(doc.Heading(setext_level(r), para.join("\n").trim())));
             return i + 1;
         }
         if (li < 4 && (starts_block(r) || interrupts(r))) {
@@ -462,7 +462,7 @@ int paragraph(List<doc.Block> out, List<str> lines, int at) {
         // The trailing spaces of the LAST line are not a hard break -- there
         // is no line after them -- so the paragraph loses them here, where
         // the inline parser would otherwise print them.
-        out.push(doc.Block.Para(para.join("\n").trim()));
+        out.push(doc.Block.Paragraph(para.join("\n").trim()));
     }
     return i;
 }

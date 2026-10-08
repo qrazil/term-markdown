@@ -61,7 +61,7 @@ void block(Out o, doc.Block b, bool tight) {
             o.put("<hr />");
             o.cr();
         }
-        case Para(str raw): {
+        case Paragraph(str raw): {
             // Inside a tight list a paragraph has no tags at all. That is
             // what "tight" means, and it is why the flag has to reach this
             // far down.
@@ -75,7 +75,7 @@ void block(Out o, doc.Block b, bool tight) {
                 o.cr();
             }
         }
-        case Head(doc.Heading h): {
+        case Heading(doc.Heading h): {
             str tag = str(h.level);
             o.cr();
             o.put("<h" + tag + ">");

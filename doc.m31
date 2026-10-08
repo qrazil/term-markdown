@@ -65,8 +65,8 @@ pub enum Block {
     /// `***`, `---`, `___`
     Rule;
     /// Raw inline source, newlines and all.
-    Para(str);
-    Head(Heading);
+    Paragraph(str);
+    Heading(Heading);
     Fence(Code);
     Quoted(Quote);
     Bullets(Listing);
