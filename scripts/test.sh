@@ -40,6 +40,8 @@ filter=${1:-}
 bash scripts/build.sh >/dev/null || exit 1
 
 pass=0
+# milliseconds since the epoch; BSD date has no %N
+now_ms() { perl -MTime::HiRes=time -e 'printf "%d", time() * 1000'; }
 fail=0
 check() {
     local what=$1 want=$2 got=$3
@@ -168,7 +170,7 @@ if [ -z "$filter" ] || [ "$filter" = full ]; then
     check "title: skips empty h1" '<title>Real</title>' "$(printf '#\n\n# Real\n' | $BIN --full | title_of)"
     check "title: reference link" '<title>See the docs</title>' \
           "$(printf '# See [the docs][d]\n\n[D]: /x\n' | $BIN --full | title_of)"
-    check "only definitions: empty" "0" "$(printf '[a]: /x\n' | $BIN | wc -c)"
+    check "only definitions: empty" "0" "$(printf '[a]: /x\n' | $BIN | wc -c | tr -d ' ')"
     check "title: h2 is not a title" '<title>Document</title>' "$(printf '## Not it\n' | $BIN --full | title_of)"
 
     # Errors. Nothing is written when the page cannot be built.
@@ -397,13 +399,13 @@ open(d + "/refs-long-label.md", "w").write("[" + "a " * 20000 + "]: /x\n\n[" + "
 PY
     for p in "$P"/*.md; do
         name=$(basename "$p" .md)
-        start=$(date +%s%N)
+        start=$(now_ms)
         if ! "$BIN" "$p" >/dev/null 2>&1; then
             printf '\033[31mFAIL\033[0m %-20s exited non-zero\n' "pathological $name"
             fail=$((fail + 1))
             continue
         fi
-        ms=$(( ($(date +%s%N) - start) / 1000000 ))
+        ms=$(( $(now_ms) - start ))
         if [ "$ms" -lt 2000 ]; then
             printf '\033[32mok\033[0m   %-20s %s ms\n' "pathological $name" "$ms"
             pass=$((pass + 1))
@@ -441,9 +443,9 @@ with open(sys.argv[1], "w") as f:
         f.write(one)
 PY
     bytes=$(wc -c <"$big")
-    start=$(date +%s%N)
+    start=$(now_ms)
     out=$($BIN "$big" | wc -c)
-    ms=$(( ($(date +%s%N) - start) / 1000000 ))
+    ms=$(( $(now_ms) - start ))
     rm -f "$big"
     if [ "$ms" -lt 5000 ]; then
         printf '\033[32mok\033[0m   %-20s %s bytes in -> %s bytes out, %s ms\n' \
