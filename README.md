@@ -9,8 +9,9 @@ did better than the alternatives.
     M31_ROOT=/path/to/m31 LANGC=/path/to/m31c bash scripts/build.sh   # ./markdown
     M31_ROOT=/path/to/m31 LANGC=/path/to/m31c bash scripts/test.sh    # the tests
 
-Building needs m31 0.3.2 or newer: `--watch` waits with `timer.sleep_ms`, which
-the standard library gained in that release.
+Building needs m31 0.4.0 or newer: the sources import the standard library by
+its grouped paths (`encoding.html`, `text.unicode`), which 0.4.0 introduced
+(`--watch` also needs `timer.sleep_ms`, from 0.3.2).
 
     markdown README.md                       the HTML fragment, on stdout
     markdown --full --title T in.md --out f  a whole document, to a file

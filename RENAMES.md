@@ -1,4 +1,35 @@
-# Renames — the m31 naming convention
+# Renames and release notes
+
+## 0.4.0 — m31 v0.4.0 (stdlib folders, naming rules)
+
+Built and tested against m31 v0.4.0 (earlier m31 releases no longer build it).
+`m31c lint` reports no findings. **No public name of markdown changed**, and
+the HTML output is byte-identical: `MD_blocks`, `MD_doc`, `MD_inlines`,
+`MD_refs`, `MD_render`, `MD_build`, `MD_theme`, `MD_title`, `MD_watch`, every
+`pub` function, type, field and constant keep their names, so a dependent
+such as tui-markdown (`import markdown.MD_doc;` and the like) changes
+nothing in its own use of markdown. What it needs is m31 0.4.0 itself, and its
+own imports of the moved standard-library modules (below).
+
+What changed inside, all of it from m31 0.4.0:
+
+| Where | Old | New |
+|---|---|---|
+| `MD_inlines`, `MD_render`, `MD_theme` | `import html;` | `import encoding.html;` |
+| `MD_inlines` | `import unicode;` | `import text.unicode;` |
+| `MD_watch` | `fs.exists(..)` | `fs.is_present(..)` |
+| `main` | `os.args()` | `os.arguments()` |
+| `main` | `options.flag("..")` (reading a parsed flag) | `options.is_flag_set("..")` |
+
+The modules are still called by their last segment (`html.escape`,
+`unicode.fold`). `parser.flag(..)` (declaring a flag on `args.Parser`) is
+unchanged.
+
+Version 0.4.0 (was 0.3.1); CI pins `M31_REF: v0.4.0`.
+
+---
+
+# 0.2.0 — the m31 naming convention
 
 Old name -> new name, per `docs/naming-decision.md` of the m31 repository
 (modules take a `PREFIX_`; a `bool` answers a question and starts with `is_`,
