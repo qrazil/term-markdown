@@ -122,7 +122,7 @@ bool did_rebuild(MD_build.Job job, str out_path) {
 /// input that is not there to begin with is a mistake in the command line
 /// and is 1; one that goes away later is waited for.
 pub int run(MD_build.Job job, str out_path, int limit) {
-    if (!fs.exists(job.input)) {
+    if (!fs.is_present(job.input)) {
         complain(job.input + ": no such file");
         return 1;
     }

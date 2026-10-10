@@ -55,8 +55,8 @@ int run(args.Parsed options, int watch_limit) {
     }
     str input = options.optional("file");
     str out_path = options.value("out").or("");
-    MD_build.Job job = MD_build.Job(input, options.flag("full"), options.value("title").or(""), theme, options.value("css").or(""));
-    if (options.flag("watch")) {
+    MD_build.Job job = MD_build.Job(input, options.is_flag_set("full"), options.value("title").or(""), theme, options.value("css").or(""));
+    if (options.is_flag_set("watch")) {
         if (out_path.size() == 0) {
             io.eprint("markdown: --watch needs --out PATH: the page is rewritten there on every change");
             return 2;
@@ -162,7 +162,7 @@ int take_watch_limit(List<str> arguments) {
     return limit;
 }
 
-List<str> arguments = os.args();
+List<str> arguments = os.arguments();
 arguments.remove_at(0);
 int watch_limit = take_watch_limit(arguments);
 if (watch_limit < 0) {

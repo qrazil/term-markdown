@@ -9,7 +9,7 @@
 // The CSS is written one `push` per line because the language has no
 // multi-line string literal. It uses single quotes throughout so that no
 // element needs an escape.
-import html;
+import encoding.html;
 import MD_inlines;
 
 /// Bulma 1.x from the jsDelivr CDN: what `--theme bulma` links.

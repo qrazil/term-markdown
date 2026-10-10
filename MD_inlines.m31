@@ -14,9 +14,9 @@
 // The module is named `inlines` and not `inline` because `inline` is a C
 // keyword and this compiler emits C.
 import MD_doc;
-import html;
+import encoding.html;
 import text;
-import unicode;
+import text.unicode;
 
 // --- character classes -------------------------------------------------------
 //

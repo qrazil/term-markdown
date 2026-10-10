@@ -6,7 +6,7 @@
 // most of what makes the output comparable with a reference implementation --
 // the tags are easy and the whitespace is not.
 import MD_doc;
-import html;
+import encoding.html;
 import MD_inlines;
 import text;
 
