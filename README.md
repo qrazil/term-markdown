@@ -25,6 +25,14 @@ Note the two dashes on `--out`: `lib/args` reads a single dash as a command
 word, so this program's short option is spelled `--o` and `-o` is an error.
 The same goes for every option here: `--theme`, never `-theme`.
 
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/qrazil/term-markdown/master/install.sh | sh
+```
+
+Picks the release for your OS and CPU, unpacks it under `~/.local/opt/term-markdown/<version>` and links the programs into `~/.local/bin`. `VERSION=v1.2.3` pins a release, `PREFIX=...` moves the install, `sh install.sh --uninstall` removes it.
+
 ## `--full`: a page you can open
 
 Without `--full` the output is the HTML fragment and nothing else, byte for
