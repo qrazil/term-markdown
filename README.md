@@ -33,6 +33,8 @@ curl -fsSL https://raw.githubusercontent.com/qrazil/term-markdown/master/install
 
 Picks the release for your OS and CPU, unpacks it under `~/.local/opt/term-markdown/<version>` and links the programs into `~/.local/bin`. `VERSION=v1.2.3` pins a release, `PREFIX=...` moves the install, `sh install.sh --uninstall` removes it.
 
+On Alpine (musl) the installer picks the `-musl` Linux asset built by `scripts/ci-musl.sh`; `LIBC=gnu|musl` overrides detection, and a release without a musl asset falls back to the glibc one.
+
 ## `--full`: a page you can open
 
 Without `--full` the output is the HTML fragment and nothing else, byte for
