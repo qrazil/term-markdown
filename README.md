@@ -21,9 +21,27 @@ its grouped paths (`encoding.html`, `text.unicode`), which 0.4.0 introduced
     markdown                                 reads standard input
     markdown --help
 
-Note the two dashes on `--out`: `lib/args` reads a single dash as a command
-word, so this program's short option is spelled `--o` and `-o` is an error.
-The same goes for every option here: `--theme`, never `-theme`.
+The grammar is Oro's `args` (`lib/args`, m31's
+[`docs/cli-conventions.md`](https://github.com/qrazil/m31/blob/master/docs/cli-conventions.md)):
+`-word` is a command and there are none, so a **short option is two dashes and one
+letter** (`--o`), `-o` is refused with a message that says so; `--help` is the only
+help (`-h`, `help` and a lone `--` are refused); a mistyped option names the closest
+one; a file called `-x` is passed as `./-x`. A bad command line is an error on
+standard error with the usage line and exit 2; a file that cannot be read or written
+is exit 1.
+
+| option | | default | |
+|---|---|---|---|
+| `--full`, `--f` | switch | off | a whole HTML document |
+| `--title TEXT`, `--t` | text | first `#` heading, else the file name | the `<title>`; with `--full` |
+| `--theme NAME` | `default`, `bulma`, `none` | `default` | with `--full` |
+| `--css URL\|PATH` | URL (linked) or file (inlined) | none | with `--full` |
+| `--out PATH`, `--o` | path | standard output | |
+| `--watch`, `--w` | switch | off | needs `--out` and a file |
+| `--watch-limit N` | integer >= 0 | 0 (never) | stop `--watch` after N builds; the tests use it (listed, not hidden) |
+| `[file]` | path or `-` | standard input | |
+| `--version` | | | `markdown 0.4.0` |
+| `--completions SHELL` | `bash`, `zsh`, `fish` | | prints a completion script |
 
 ## Install
 
@@ -31,7 +49,7 @@ The same goes for every option here: `--theme`, never `-theme`.
 curl -fsSL https://raw.githubusercontent.com/qrazil/term-markdown/master/install.sh | sh
 ```
 
-Picks the release for your OS and CPU, unpacks it under `~/.local/opt/term-markdown/<version>` and links the programs into `~/.local/bin`. `VERSION=v1.2.3` pins a release, `PREFIX=...` moves the install, `sh install.sh --uninstall` removes it.
+Picks the release for your OS and CPU, unpacks it under `~/.local/opt/term-markdown/<version>` and links the programs into `~/.local/bin`. `--release v1.2.3` (or `VERSION=v1.2.3`) pins a release, `--prefix DIR` (or `PREFIX=...`) moves the install, `--libc gnu|musl` (or `LIBC=`) overrides detection, `-uninstall` removes it, `--help` lists them; piped from curl, pass them after `-s --`: `curl -fsSL <url> | sh -s -- --prefix /usr/local`. The grammar is Oro's: a mistyped option is an error naming the closest one (exit 2).
 
 On Alpine (musl) the installer picks the `-musl` Linux asset built by `scripts/ci-musl.sh`; `LIBC=gnu|musl` overrides detection, and a release without a musl asset falls back to the glibc one.
 
@@ -120,7 +138,7 @@ How it behaves, because editors do odd things to files:
 - There is no signal handler, so Ctrl-C ends it at once. If that lands in the
   middle of a write, a stray `out.html.markdown-tmp` stays behind; delete it.
 
-`--watch-limit N` (not in `--help`) makes it exit 0 after N successful builds,
+`--watch-limit N` makes it exit 0 after N successful builds,
 the first included. The tests use it to have a watcher that ends.
 
 ## The shape of it
@@ -255,8 +273,9 @@ executable version of this list.
    of awkward fragments and compares against the same oracle: 1 000 documents
    per run, four seeds. This found three real bugs that the fixed corpus did
    not.
-4. **The command line.** stdin, `-`, `--full`, `--title`, `--out`, a missing
-   file, a bad option.
+4. **The command line.** `tests/test_cli.sh`: every option in its long and short
+   forms, Oro's refusals, stdin, `-`, the usage errors (exit 2), a missing file
+   (exit 1), `--help`, `--version`, `--completions`, the installer.
 5. **The `--full` pages.** Golden files in `tests/full/` for each theme, for
    `--css` as a URL and as a file, and for Bulma with a URL after it; the
    default-title rule in a dozen cases; the errors (a missing, unreadable,

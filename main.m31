@@ -8,8 +8,8 @@
 //   markdown --watch f.md --out page.html   rebuild whenever f.md changes
 //   markdown                         reads standard input
 //
-// Two dashes: `lib/args` reads one dash as a command word, so the short form
-// of `--out` is `--o` and `-o` is refused.
+// The grammar is Oro's (`lib/args`): `-word` is a command, so the short form of
+// `--out` is `--o` and `-o` is refused; also `--version`, `--completions SHELL`.
 //
 // See README.md for what of CommonMark is in, what is out, and why.
 import args;
@@ -113,62 +113,23 @@ int run(args.Parsed options, int watch_limit) {
     }
 }
 
+// Keep in step with `version` in the `deps` file.
+const str VERSION = "0.4.0";
+
 args.Parser parser = args.Parser("markdown", summary: "CommonMark (a subset) to HTML");
-parser.flag("full", help: "wrap the output in a whole HTML document");
-parser.value("title", placeholder: "TEXT", help: "the <title> of a --full document; default: the first # heading, else the file name");
+parser.version = VERSION;
+parser.epilog = "exit status: 0 ok, 1 could not read or write, 2 usage error";
+parser.flag("full", short: "f", help: "wrap the output in a whole HTML document");
+parser.value("title", short: "t", placeholder: "TEXT", help: "the <title> of a --full document; default: the first # heading, else the file name");
 parser.value("theme", placeholder: "NAME", default: "default", help: "--full styling: default (built in, works offline), bulma (Bulma 1.x from a CDN) or none");
 parser.value("css", placeholder: "URL|PATH", help: "--full extra stylesheet: an http(s) URL is linked, a file is inlined; comes after the theme");
 parser.value("out", short: "o", placeholder: "PATH", help: "write here instead of standard output");
-parser.flag("watch", help: "render, then render again whenever the file (or a --css file) changes; needs --out and a file; refresh the browser yourself");
+parser.flag("watch", short: "w", help: "render, then render again whenever the file (or a --css file) changes; needs --out and a file; refresh the browser yourself");
 parser.optional("file", "-", help: "the markdown to read; - or nothing is standard input");
-
-// `--watch-limit N`: stop after N successful builds, the first included. It is
-// for the tests, which need a watcher that ends, and is taken out of the
-// arguments here so that `--help` does not list it. Returns the limit, 0 for
-// none, and -1 if what follows it is not a whole number of at least 0.
-int take_watch_limit(List<str> arguments) {
-    int limit = 0;
-    int index = 0;
-    while (index < arguments.size()) {
-        str word = arguments[index];
-        str given = "";
-        int taken = 0;
-        if (word == "--watch-limit" && index + 1 < arguments.size()) {
-            given = arguments[index + 1];
-            taken = 2;
-        } else if (word.starts_with("--watch-limit=")) {
-            given = word.substr(14, word.size());
-            taken = 1;
-        }
-        if (taken == 0) {
-            index = index + 1;
-            continue;
-        }
-        match (given.parse_int()) {
-            case Some(int count): {
-                limit = count;
-            }
-            case None: {
-                limit = -1;
-            }
-        }
-        if (limit < 0) {
-            return -1;
-        }
-        for (int skip in 0 .. taken) {
-            arguments.remove_at(index);
-        }
-    }
-    return limit;
-}
-
+parser.integer("watch-limit", min: "0", placeholder: "N", help: "with --watch: stop after N successful builds, the first included (0: never; the tests use it)");
+parser.completions();
 List<str> arguments = os.arguments();
 arguments.remove_at(0);
-int watch_limit = take_watch_limit(arguments);
-if (watch_limit < 0) {
-    io.eprint("markdown: --watch-limit: expected a whole number, 0 or more");
-    os.exit(2);
-}
 match (parser.parse(arguments)) {
     case Err(args.UsageError error): {
         io.eprint("markdown: " + error.to_str());
@@ -176,12 +137,28 @@ match (parser.parse(arguments)) {
         os.exit(2);
     }
     case Ok(args.Parsed parsed): {
+        match (parsed.version()) {
+            case Some(str version_line): {
+                print(version_line);
+                os.exit(0);
+            }
+            case None: {
+            }
+        }
+        match (parsed.completions()) {
+            case Some(str script): {
+                print(script);
+                os.exit(0);
+            }
+            case None: {
+            }
+        }
         match (parsed.help()) {
             case Some(str help_text): {
                 print(help_text);
             }
             case None: {
-                int code = run(parsed, watch_limit);
+                int code = run(parsed, parsed.integer("watch-limit").or(0));
                 if (code != 0) {
                     os.exit(code);
                 }

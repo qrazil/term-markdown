@@ -275,7 +275,7 @@ if [ -z "$filter" ] || [ "$filter" = watch ]; then
     check "watch: missing input at start: no output" "no" "$([ -e "$D/never.html" ] && echo yes || echo no)"
     $BIN --watch --watch-limit many --out "$D/never.html" "$T/headings.md" >/dev/null 2>&1
     check "watch: bad --watch-limit: exit" "2" "$?"
-    check "watch-limit is not in --help" "0" "$($BIN --help | grep -c watch-limit)"
+    check "watch-limit is in --help (Oro has no hidden options)" "1" "$($BIN --help | grep -c -- --watch-limit)"
 
     # The build at start, a change in place, a replacement by rename.
     printf '# one\n' >"$D/a.md"
@@ -455,6 +455,23 @@ PY
         printf '\033[31mFAIL\033[0m %-20s %s ms for %s bytes\n' "1 MB document" "$ms" "$bytes"
         fail=$((fail + 1))
     fi
+fi
+
+# --- the command line: its own suite (tests/test_cli.sh) --------------------------
+if [ -z "$filter" ] || [[ cli == *$filter* ]]; then
+    cli_log=$(mktemp)
+    MARKDOWN_BIN="$BIN" bash tests/test_cli.sh >"$cli_log" 2>&1
+    cli_rc=$?
+    cat "$cli_log"
+    cli_line=$(grep ' passed, ' "$cli_log" | tail -1)
+    pass=$((pass + $(printf '%s' "$cli_line" | awk '{print $1+0}')))
+    cli_fail=$(printf '%s' "$cli_line" | awk '{print $3+0}')
+    fail=$((fail + cli_fail))
+    if [ "$cli_rc" != 0 ] && [ "$cli_fail" = 0 ]; then
+        printf '\033[31mFAIL\033[0m cli suite: exit %s, no summary line\n' "$cli_rc"
+        fail=$((fail + 1))
+    fi
+    rm -f "$cli_log"
 fi
 
 echo "── $pass passed, $fail failed"
