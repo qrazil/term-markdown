@@ -1,25 +1,25 @@
-// The block parser: markdown source to a list of `doc.Block`.
-//
-// Line based and recursive. The document is split into lines once; every
-// container -- a block quote, a list item -- strips its own marker off the
-// lines it owns and hands the remainder back to `parse_lines`, so nesting
-// costs a recursive call and nothing else.
-//
-// Inline content is NOT parsed here. A block keeps the raw source of its own
-// text and `render` parses it later (see `doc`).
+/* The block parser: markdown source to a list of `doc.Block`.
+ *
+ * Line based and recursive. The document is split into lines once; every
+ * container -- a block quote, a list item -- strips its own marker off the
+ * lines it owns and hands the remainder back to `parse_lines`, so nesting
+ * costs a recursive call and nothing else.
+ *
+ * Inline content is NOT parsed here. A block keeps the raw source of its own
+ * text and `render` parses it later (see `doc`). */
 import MD_doc;
 import MD_refs;
 import math;
 import text;
 
-/// `source` as blocks, and the link reference definitions found in them.
-/// Line endings are normalised and leading tabs expanded before anything else
-/// looks at the text.
-///
-/// A definition can sit anywhere a paragraph can -- at the top, in a block
-/// quote, in a list item -- and is used from anywhere, before it or after, so
-/// one map is filled as the whole tree is built and handed to the renderer
-/// with it. A definition leaves no block: the paragraph it began loses it.
+/** `source` as blocks, and the link reference definitions found in them.
+ * Line endings are normalised and leading tabs expanded before anything else
+ * looks at the text.
+ *
+ * A definition can sit anywhere a paragraph can -- at the top, in a block
+ * quote, in a list item -- and is used from anywhere, before it or after, so
+ * one map is filled as the whole tree is built and handed to the renderer
+ * with it. A definition leaves no block: the paragraph it began loses it. */
 pub MD_doc.Document parse(str source) {
     Map<str, MD_doc.Reference> references = {};
     List<MD_doc.Block> blocks = parse_lines(split_lines(source), references);
@@ -36,10 +36,10 @@ List<str> split_lines(str source) {
     return out;
 }
 
-// Tabs in the LEADING whitespace become spaces to the next four-column stop,
-// which is the rule CommonMark indentation follows. A tab further along is
-// left exactly as written: it is content, and a code block that held one
-// should still hold one.
+/* Tabs in the LEADING whitespace become spaces to the next four-column stop,
+ * which is the rule CommonMark indentation follows. A tab further along is
+ * left exactly as written: it is content, and a code block that held one
+ * should still hold one. */
 str expand_tabs(str line) {
     int length = line.size();
     int index = 0;
@@ -103,8 +103,8 @@ bool is_blank(str line) {
 
 // --- line shapes -------------------------------------------------------------
 
-// `***`, `---`, `___`: three or more of one character, spaces allowed
-// between them, nothing else on the line. `stripped` has had its indent removed.
+/* `***`, `---`, `___`: three or more of one character, spaces allowed
+ * between them, nothing else on the line. `stripped` has had its indent removed. */
 bool is_thematic_break(str stripped) {
     int length = stripped.size();
     if (length < 3) {
@@ -142,8 +142,8 @@ int atx_level(str stripped) {
     return index;
 }
 
-// The text of an ATX heading whose marker is `level` characters long: the
-// rest of the line, with a closing run of `#` taken off.
+/* The text of an ATX heading whose marker is `level` characters long: the
+ * rest of the line, with a closing run of `#` taken off. */
 str atx_text(str stripped, int level) {
     str body = chop(stripped, level).trim();
     int length = body.size();
@@ -177,8 +177,8 @@ int fence_character(str stripped) {
     if (index < 3) {
         return 0;
     }
-    // A backtick fence's info string may not hold a backtick, or ``a`` at the
-    // start of a line would open a block instead of a code span.
+    /* A backtick fence's info string may not hold a backtick, or ``a`` at the
+     * start of a line would open a block instead of a code span. */
     if (character == '`' && chop(stripped, index).contains("`")) {
         return 0;
     }
@@ -220,9 +220,9 @@ int setext_level(str stripped) {
     return 2;
 }
 
-// A list marker at the start of `stripped`. `length` counts the marker's own
-// characters -- 1 for `-`, 3 for `10.` -- and `character` is `-`, `+`, `*`, `.` or
-// `)`, which is what decides whether two items belong to one list.
+/* A list marker at the start of `stripped`. `length` counts the marker's own
+ * characters -- 1 for `-`, 3 for `10.` -- and `character` is `-`, `+`, `*`, `.` or
+ * `)`, which is what decides whether two items belong to one list. */
 type Marker {
     bool is_found;
     bool is_ordered;
@@ -265,9 +265,9 @@ bool is_block_start(str stripped) {
     return is_thematic_break(stripped) || atx_level(stripped) > 0 || fence_character(stripped) != 0 || stripped.starts_with(">");
 }
 
-// A list item may interrupt a paragraph only when it is not empty, and an
-// ordered one only when it is numbered 1 -- otherwise every line beginning
-// "2024. " would start a list.
+/* A list item may interrupt a paragraph only when it is not empty, and an
+ * ordered one only when it is numbered 1 -- otherwise every line beginning
+ * "2024. " would start a list. */
 bool can_interrupt_paragraph(str stripped) {
     Marker marker = marker_of(stripped);
     if (!marker.is_found) {
@@ -279,16 +279,16 @@ bool can_interrupt_paragraph(str stripped) {
     return !marker.is_ordered || marker.number == 1;
 }
 
-// Add `line` to `held` as a LAZY continuation of the paragraph already
-// there, by gluing it onto the previous line rather than pushing it.
-//
-// It has to be glued. A container strips its markers and hands the remaining
-// lines back to `parse_lines`, which is what makes nesting one recursive
-// call -- but that loses the fact that a line arrived lazily, and a lazy
-// line is paragraph text and nothing else. Handed over on its own, `===`
-// under `> quote` would become a setext underline and `- x` would become a
-// list. Inside the previous line it cannot be either, and the paragraph
-// joins its lines with a newline anyway, so the text comes out the same.
+/* Add `line` to `held` as a LAZY continuation of the paragraph already
+ * there, by gluing it onto the previous line rather than pushing it.
+ *
+ * It has to be glued. A container strips its markers and hands the remaining
+ * lines back to `parse_lines`, which is what makes nesting one recursive
+ * call -- but that loses the fact that a line arrived lazily, and a lazy
+ * line is paragraph text and nothing else. Handed over on its own, `===`
+ * under `> quote` would become a setext underline and `- x` would become a
+ * list. Inside the previous line it cannot be either, and the paragraph
+ * joins its lines with a newline anyway, so the text comes out the same. */
 void lazily(List<str> held, str line) {
     int last = held.size() - 1;
     held[last] = held[last] + "\n" + text.trim_start(line);
@@ -422,16 +422,16 @@ int block_quote(List<MD_doc.Block> out, List<str> lines, int start_line, Map<str
             line_index = line_index + 1;
             continue;
         }
-        // Lazy continuation: a bare line carries on the quote's paragraph,
-        // but only if a paragraph is what it would carry on.
+        /* Lazy continuation: a bare line carries on the quote's paragraph,
+         * but only if a paragraph is what it would carry on. */
         if (is_blank(line) || inner.size() == 0 || is_blank(inner[inner.size() - 1])) {
             is_done = true;
             continue;
         }
-        // Any list marker ends the quote, not only one that could interrupt
-        // a paragraph: a lazy line is matched against the DOCUMENT, where
-        // there is no paragraph for the "must not be empty, must be
-        // numbered 1" rule to protect.
+        /* Any list marker ends the quote, not only one that could interrupt
+         * a paragraph: a lazy line is matched against the DOCUMENT, where
+         * there is no paragraph for the "must not be empty, must be
+         * numbered 1" rule to protect. */
         if (line_indent < 4 && (is_block_start(stripped) || marker_of(stripped).is_found)) {
             is_done = true;
             continue;
@@ -457,9 +457,9 @@ int paragraph(List<MD_doc.Block> out, List<str> lines, int start_line, Map<str, 
         int line_indent = indent_of(line);
         str stripped = chop(line, line_indent);
         if (line_indent < 4 && paragraph_lines.size() > 0 && setext_level(stripped) > 0) {
-            // Definitions come off the front of the heading's text first. If
-            // that leaves nothing the underline underlines nothing: it is
-            // left for `parse_lines` to read as what it would be on its own.
+            /* Definitions come off the front of the heading's text first. If
+             * that leaves nothing the underline underlines nothing: it is
+             * left for `parse_lines` to read as what it would be on its own. */
             str heading_text = without_definitions(paragraph_lines.join("\n"), references);
             if (heading_text.size() == 0) {
                 return line_index;
@@ -475,9 +475,9 @@ int paragraph(List<MD_doc.Block> out, List<str> lines, int start_line, Map<str, 
         line_index = line_index + 1;
     }
     if (paragraph_lines.size() > 0) {
-        // The trailing spaces of the LAST line are not a hard break -- there
-        // is no line after them -- so the paragraph loses them here, where
-        // the inline parser would otherwise print them.
+        /* The trailing spaces of the LAST line are not a hard break -- there
+         * is no line after them -- so the paragraph loses them here, where
+         * the inline parser would otherwise print them. */
         str body = without_definitions(paragraph_lines.join("\n"), references);
         if (body.size() > 0) {
             out.push(MD_doc.Block.Paragraph(body));
@@ -486,10 +486,10 @@ int paragraph(List<MD_doc.Block> out, List<str> lines, int start_line, Map<str, 
     return line_index;
 }
 
-// `paragraph_text` less the link reference definitions it begins with, which
-// are filed in `references`, and trimmed. A definition can only be first: one
-// further down is just text, which is how a definition fails to interrupt a
-// paragraph.
+/* `paragraph_text` less the link reference definitions it begins with, which
+ * are filed in `references`, and trimmed. A definition can only be first: one
+ * further down is just text, which is how a definition fails to interrupt a
+ * paragraph. */
 str without_definitions(str paragraph_text, Map<str, MD_doc.Reference> references) {
     int offset = 0;
     int next = MD_refs.parse_definition(paragraph_text, offset, references);
@@ -516,15 +516,15 @@ int list_at(List<MD_doc.Block> out, List<str> lines, int start_line, Map<str, MD
         str line = lines[line_index];
         int line_indent = indent_of(line);
         Marker marker = marker_of(chop(line, line_indent));
-        // `- - -` is a thematic break and not three items: the break wins,
-        // here as in `parse_lines`.
+        /* `- - -` is a thematic break and not three items: the break wins,
+         * here as in `parse_lines`. */
         if (line_indent >= 4 || is_thematic_break(chop(line, line_indent)) || !marker.is_found || marker.character != first.character) {
             is_done = true;
             continue;
         }
-        // Where this item's content starts. One to four spaces after the
-        // marker indent to that column; five or more mean the content is an
-        // indented code block that begins one space in.
+        /* Where this item's content starts. One to four spaces after the
+         * marker indent to that column; five or more mean the content is an
+         * indented code block that begins one space in. */
         int after = line_indent + marker.length;
         int spaces = 0;
         while (after + spaces < line.size() && line.byte_at(after + spaces) == ' ') {
@@ -558,13 +558,13 @@ int list_at(List<MD_doc.Block> out, List<str> lines, int start_line, Map<str, MD
                 continue;
             }
             str following_stripped = chop(following, following_indent);
-            // A line indented four or more cannot be indented code here,
-            // because indented code may not interrupt a paragraph -- so it
-            // is lazy text whatever it looks like.
-            // Any marker ends the item -- `2.` after `1.` is the next item,
-            // and `*` alone is an empty item of a new list. The "must not be
-            // empty, must be numbered 1" rule is only for interrupting a
-            // paragraph, and a lazy line is matched against the document.
+            /* A line indented four or more cannot be indented code here,
+             * because indented code may not interrupt a paragraph -- so it
+             * is lazy text whatever it looks like.
+             * Any marker ends the item -- `2.` after `1.` is the next item,
+             * and `*` alone is an empty item of a new list. The "must not be
+             * empty, must be numbered 1" rule is only for interrupting a
+             * paragraph, and a lazy line is matched against the document. */
             bool is_lazy = following_indent >= 4 || !is_block_start(following_stripped) && !marker_of(following_stripped).is_found;
             if (!has_pending_blank && !is_blank(body[body.size() - 1]) && is_lazy) {
                 lazily(body, following);
@@ -574,10 +574,10 @@ int list_at(List<MD_doc.Block> out, List<str> lines, int start_line, Map<str, MD
             is_ended = true;
         }
         items.push(MD_doc.Item(parse_lines(body, references)));
-        // A blank line between two items makes the whole list loose -- but
-        // only if another item really follows. `- - -` after a blank line
-        // looks like a marker and is a thematic break, which ends the list
-        // and leaves it tight.
+        /* A blank line between two items makes the whole list loose -- but
+         * only if another item really follows. `- - -` after a blank line
+         * looks like a marker and is a thematic break, which ends the list
+         * and leaves it tight. */
         if (has_pending_blank && line_index < line_count) {
             str next = lines[line_index];
             int next_indent = indent_of(next);
@@ -618,8 +618,8 @@ bool is_table_head(List<str> lines, int start_line) {
     return true;
 }
 
-// `:-`, `-:`, `:-:` or `-`, with at least one dash. -1 means this is not a
-// delimiter cell at all.
+/* `:-`, `-:`, `:-:` or `-`, with at least one dash. -1 means this is not a
+ * delimiter cell at all. */
 int align_of(str cell) {
     str trimmed = cell.trim();
     int length = trimmed.size();
@@ -656,8 +656,8 @@ int align_of(str cell) {
     return MD_doc.ALIGN_NONE;
 }
 
-// One row split on its unescaped pipes, with the optional leading and
-// trailing pipe dropped.
+/* One row split on its unescaped pipes, with the optional leading and
+ * trailing pipe dropped. */
 List<str> cells_of(str line) {
     str row = line.trim();
     if (row.starts_with("|")) {

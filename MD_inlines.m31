@@ -1,34 +1,34 @@
-// The inline parser: one block's raw markdown source to the HTML that goes
-// inside its element.
-//
-// Two passes, which is what CommonMark's emphasis rules need and what a
-// single left-to-right scan cannot do. The first pass walks the bytes and
-// produces a list of `Node`s: a node is either FINISHED HTML (a code span, a
-// link, an escaped run of text) or an unresolved RUN of `*` or `_`. The
-// second pass, `emphasis`, pairs the runs up and hangs `<em>`/`<strong>` tags
-// on them. `emit` then concatenates.
-//
-// Text is escaped as it is pushed, not at the end, so a node is either final
-// HTML or a delimiter run and there is no third state to keep straight.
-//
-// The module is named `inlines` and not `inline` because `inline` is a C
-// keyword and this compiler emits C.
+/* The inline parser: one block's raw markdown source to the HTML that goes
+ * inside its element.
+ *
+ * Two passes, which is what CommonMark's emphasis rules need and what a
+ * single left-to-right scan cannot do. The first pass walks the bytes and
+ * produces a list of `Node`s: a node is either FINISHED HTML (a code span, a
+ * link, an escaped run of text) or an unresolved RUN of `*` or `_`. The
+ * second pass, `emphasis`, pairs the runs up and hangs `<em>`/`<strong>` tags
+ * on them. `emit` then concatenates.
+ *
+ * Text is escaped as it is pushed, not at the end, so a node is either final
+ * HTML or a delimiter run and there is no third state to keep straight.
+ *
+ * The module is named `inlines` and not `inline` because `inline` is a C
+ * keyword and this compiler emits C. */
 import MD_doc;
 import encoding.html;
 import text;
 import text.unicode;
 
 // --- character classes -------------------------------------------------------
-//
-// Everything here is ASCII, and looks at BYTES. That is exact for the classes
-// it needs -- every byte of a non-ASCII character is >= 128, so a multi-byte
-// character is uniformly "other", which is what a letter is -- and it is the
-// one place this parser knowingly differs from CommonMark, which classifies
-// by Unicode category. `é` and `字` are "other" here and there; U+00A0 and
-// `»` are "other" here and whitespace/punctuation there. See README.
+/*
+ * Everything here is ASCII, and looks at BYTES. That is exact for the classes
+ * it needs -- every byte of a non-ASCII character is >= 128, so a multi-byte
+ * character is uniformly "other", which is what a letter is -- and it is the
+ * one place this parser knowingly differs from CommonMark, which classifies
+ * by Unicode category. `é` and `字` are "other" here and there; U+00A0 and
+ * `»` are "other" here and whitespace/punctuation there. See README. */
 
-/// Is `character` one of the ASCII spaces: space, tab, line feed, carriage
-/// return, vertical tab, form feed?
+/** Is `character` one of the ASCII spaces: space, tab, line feed, carriage
+ * return, vertical tab, form feed? */
 pub bool is_space_byte(int character) {
     return character == ' ' || character == '\t' || character == '\n' || character == '\r' || character == 11 || character == 12;
 }
@@ -60,12 +60,12 @@ bool is_alphanumeric_byte(int character) {
 }
 
 // --- URL escaping ------------------------------------------------------------
-//
-// cmark's `houdini_escape_href`, reproduced: `&` becomes `&amp;`, `'` becomes
-// `&#x27;`, and every byte outside the safe set becomes `%XX` with upper-case
-// hex. The safe set is alphanumerics plus this punctuation, which is what
-// cmark's HREF_SAFE table holds -- note that `<`, `>`, `"`, `[`, `\`, `]`,
-// `^`, `{`, `|`, `}`, space and DEL are NOT in it.
+/*
+ * cmark's `houdini_escape_href`, reproduced: `&` becomes `&amp;`, `'` becomes
+ * `&#x27;`, and every byte outside the safe set becomes `%XX` with upper-case
+ * hex. The safe set is alphanumerics plus this punctuation, which is what
+ * cmark's HREF_SAFE table holds -- note that `<`, `>`, `"`, `[`, `\`, `]`,
+ * `^`, `{`, `|`, `}`, space and DEL are NOT in it. */
 const str HREF_SAFE = "!#$%&'()*+,-./:;=?@_~`";
 const str HEX = "0123456789ABCDEF";
 
@@ -99,24 +99,24 @@ pub str escape_href(str destination) {
 
 // --- nodes -------------------------------------------------------------------
 
-// Either finished HTML (`is_delimiter` false, `out` is it) or an unresolved run of
-// `*` or `_`. `original` is how many were written, `count` how many are still
-// unpaired; `open_tags` grows leftwards and `close_tags` rightwards as the
-// second pass hangs tags on the run, which is the order that makes
-// `***x***` come out `<em><strong>x</strong></em>`.
+/* Either finished HTML (`is_delimiter` false, `out` is it) or an unresolved run of
+ * `*` or `_`. `original` is how many were written, `count` how many are still
+ * unpaired; `open_tags` grows leftwards and `close_tags` rightwards as the
+ * second pass hangs tags on the run, which is the order that makes
+ * `***x***` come out `<em><strong>x</strong></em>`. */
 type Node {
     bool is_delimiter;
     str out;
     int character;
     int original;
     int count;
-    // What the flanking rules said when the run was scanned. These never
-    // change: the rule of three asks what a run IS, not what is left of it.
+    /* What the flanking rules said when the run was scanned. These never
+     * change: the rule of three asks what a run IS, not what is left of it. */
     bool can_open;
     bool can_close;
-    // Off the delimiter stack. A dead run is no longer a candidate for
-    // pairing, but its unspent characters are still printed -- which is what
-    // "unlinking the delimiter but not the text node" means in cmark.
+    /* Off the delimiter stack. A dead run is no longer a candidate for
+     * pairing, but its unspent characters are still printed -- which is what
+     * "unlinking the delimiter but not the text node" means in cmark. */
     bool is_dead;
     str open_tags;
     str close_tags;
@@ -139,17 +139,17 @@ str mark_of(int character) {
 
 // --- the scan ----------------------------------------------------------------
 
-/// `source`, a block's raw inline source, as the HTML that goes inside its element.
-/// `references` are the document's link reference definitions, which
-/// `[text][label]`, `[text][]` and `[label]` look up; an empty map makes
-/// every one of those literal text.
+/** `source`, a block's raw inline source, as the HTML that goes inside its element.
+ * `references` are the document's link reference definitions, which
+ * `[text][label]`, `[text][]` and `[label]` look up; an empty map makes
+ * every one of those literal text. */
 pub str render(str source, Map<str, MD_doc.Reference> references) {
     return render_at(source, references, 0);
 }
 
-// The same, with the plain text only: every tag removed. This is what an
-// image's `alt` attribute holds, and rendering then stripping is how the
-// literal-vs-emphasis question is answered without a second parser.
+/* The same, with the plain text only: every tag removed. This is what an
+ * image's `alt` attribute holds, and rendering then stripping is how the
+ * literal-vs-emphasis question is answered without a second parser. */
 str plain(str source, Map<str, MD_doc.Reference> references) {
     return strip_tags(render_at(source, references, 0));
 }
@@ -160,17 +160,17 @@ str render_at(str source, Map<str, MD_doc.Reference> references, int depth) {
     return emit(nodes);
 }
 
-// For every `[` in `source`, the offset of the `]` that closes it, or -1. An empty
-// list means there is no `[` at all.
-//
-// One pass with a stack, which is the whole reason this exists: searching
-// forward for the matching `]` at each `[` is quadratic, and 50 000
-// unmatched `[` -- 50 KB, an entirely possible thing to be handed -- took
-// four and a half seconds that way. It is the same answer, because a
-// stack's match and a depth count's match are the same bracket.
-//
-// A backslash escapes a bracket and a code span hides one, so a `]` inside
-// a code span does not close the link that contains it.
+/* For every `[` in `source`, the offset of the `]` that closes it, or -1. An empty
+ * list means there is no `[` at all.
+ *
+ * One pass with a stack, which is the whole reason this exists: searching
+ * forward for the matching `]` at each `[` is quadratic, and 50 000
+ * unmatched `[` -- 50 KB, an entirely possible thing to be handed -- took
+ * four and a half seconds that way. It is the same answer, because a
+ * stack's match and a depth count's match are the same bracket.
+ *
+ * A backslash escapes a bracket and a code span hides one, so a `]` inside
+ * a code span does not close the link that contains it. */
 List<int> brackets(str source) {
     int length = source.size();
     if (source.index_of("[").is_none()) {
@@ -233,8 +233,8 @@ List<Node> scan(str source, List<int> shut, Map<str, MD_doc.Reference> reference
                 from = index;
                 continue;
             }
-            // Not a span: the run is literal, and skipping it whole stops the
-            // next backtick from opening one inside it.
+            /* Not a span: the run is literal, and skipping it whole stops the
+             * next backtick from opening one inside it. */
             int run_end = index;
             while (run_end < length && source.byte_at(run_end) == '`') {
                 run_end = run_end + 1;
@@ -263,9 +263,9 @@ List<Node> scan(str source, List<int> shut, Map<str, MD_doc.Reference> reference
             continue;
         }
         if (character == '\n') {
-            // A line break. Two or more trailing spaces make it hard; the
-            // trailing spaces go either way, and so does the next line's
-            // indent.
+            /* A line break. Two or more trailing spaces make it hard; the
+             * trailing spaces go either way, and so does the next line's
+             * indent. */
             int back = index;
             while (back > from && source.byte_at(back - 1) == ' ') {
                 back = back - 1;
@@ -312,8 +312,8 @@ int skip_indent(str source, int start) {
     return index;
 }
 
-// The delimiter run `source[start..stop)` of `character`, classified. The rules are CommonMark's
-// left-flanking and right-flanking, over the byte before and the byte after.
+/* The delimiter run `source[start..stop)` of `character`, classified. The rules are CommonMark's
+ * left-flanking and right-flanking, over the byte before and the byte after. */
 Node run_at(str source, int start, int stop, int character) {
     int before = 32;
     if (start > 0) {
@@ -337,8 +337,8 @@ Node run_at(str source, int start, int stop, int character) {
 
 // --- code spans --------------------------------------------------------------
 
-// Returns the offset just past the span, or `start` if the backtick run at `start`
-// opens nothing.
+/* Returns the offset just past the span, or `start` if the backtick run at `start`
+ * opens nothing. */
 int code_span(List<Node> nodes, str source, int start, int from) {
     int length = source.size();
     int run_end = start;
@@ -407,9 +407,9 @@ int autolink(List<Node> nodes, str source, int start, int from) {
     return start;
 }
 
-// `scheme:rest`, where the scheme is 2 to 32 characters starting with a
-// letter. The characters that would have ended the scan -- space, `<`, `>` --
-// are already gone.
+/* `scheme:rest`, where the scheme is 2 to 32 characters starting with a
+ * letter. The characters that would have ended the scan -- space, `<`, `>` --
+ * are already gone. */
 bool is_uri(str body) {
     int length = body.size();
     if (length == 0 || !is_alphabetic_byte(body.byte_at(0))) {
@@ -486,8 +486,8 @@ int link(List<Node> nodes, str source, List<int> shuts, Map<str, MD_doc.Referenc
     if (source.byte_at(start) == '!') {
         bang = 1;
     }
-    // A link may not hold another link, so inside one a `[` is literal. An
-    // image may, because its content becomes plain text either way.
+    /* A link may not hold another link, so inside one a `[` is literal. An
+     * image may, because its content becomes plain text either way. */
     if (bang == 0 && depth > 0) {
         return start;
     }
@@ -499,8 +499,8 @@ int link(List<Node> nodes, str source, List<int> shuts, Map<str, MD_doc.Referenc
     if (shut < 0) {
         return start;
     }
-    // An inline destination is tried first and wins; only when `](` does not
-    // begin a valid one does the bracket get a chance as a reference.
+    /* An inline destination is tried first and wins; only when `](` does not
+     * begin a valid one does the bracket get a chance as a reference. */
     Target clause = Target(false, "", "", start);
     if (shut + 1 < source.size() && source.byte_at(shut + 1) == '(') {
         clause = target(source, shut + 2);
@@ -516,8 +516,8 @@ int link(List<Node> nodes, str source, List<int> shuts, Map<str, MD_doc.Referenc
     return clause.after;
 }
 
-// The `<a>` or `<img>` for one link whose text is `inner` and whose
-// destination and title are in `clause`.
+/* The `<a>` or `<img>` for one link whose text is `inner` and whose
+ * destination and title are in `clause`. */
 str link_html(int bang, str inner, Target clause, Map<str, MD_doc.Reference> references, int depth) {
     List<str> out = [];
     if (bang == 1) {
@@ -550,15 +550,15 @@ str link_html(int bang, str inner, Target clause, Map<str, MD_doc.Reference> ref
 
 // --- reference links ---------------------------------------------------------
 
-/// The longest label CommonMark allows, in characters between the brackets.
-/// A `\x` escape counts once, as the reference implementation counts it; here
-/// the unit is a byte, so a label of two-byte letters is cut at 500 of them.
+/** The longest label CommonMark allows, in characters between the brackets.
+ * A `\x` escape counts once, as the reference implementation counts it; here
+ * the unit is a byte, so a label of two-byte letters is cut at 500 of them. */
 const int LABEL_LIMIT = 1000;
 
-/// The offset just past the `]` of the link label that starts at `start`
-/// (which must hold a `[`), or -1 if what is there is not a label: an
-/// unescaped bracket inside, no closing `]`, or more than `LABEL_LIMIT`
-/// characters.
+/** The offset just past the `]` of the link label that starts at `start`
+ * (which must hold a `[`), or -1 if what is there is not a label: an
+ * unescaped bracket inside, no closing `]`, or more than `LABEL_LIMIT`
+ * characters. */
 pub int label_end(str source, int start) {
     int length = source.size();
     if (start >= length || source.byte_at(start) != '[') {
@@ -590,25 +590,25 @@ pub int label_end(str source, int start) {
     return -1;
 }
 
-/// `label`, the text between a label's brackets, as the key it matches by:
-/// trimmed, every run of white space one space, and case folded (so `ẞ`
-/// and `SS` agree). "" is a label that is nothing but space, which no
-/// definition may have.
+/** `label`, the text between a label's brackets, as the key it matches by:
+ * trimmed, every run of white space one space, and case folded (so `ẞ`
+ * and `SS` agree). "" is a label that is nothing but space, which no
+ * definition may have. */
 pub str normalize_label(str label) {
     return unicode.fold(text.split_whitespace(label).join(" "));
 }
 
-// The reference a bracket pair `source[open..shut]` stands for, as a `Target`,
-// or an invalid one. Three shapes, by what follows the `]`:
-//
-//   [text][label]   the label in the second brackets
-//   [text][]        the text is the label
-//   [label]         likewise, when no label follows
-//
-// A second pair of brackets that is a label but names nothing is not a
-// fallback to the shortcut form: `[foo][bar]` with only `foo` defined is
-// literal. The first pair doubles as the label only if it holds no brackets
-// of its own.
+/* The reference a bracket pair `source[open..shut]` stands for, as a `Target`,
+ * or an invalid one. Three shapes, by what follows the `]`:
+ *
+ *   [text][label]   the label in the second brackets
+ *   [text][]        the text is the label
+ *   [label]         likewise, when no label follows
+ *
+ * A second pair of brackets that is a label but names nothing is not a
+ * fallback to the shortcut form: `[foo][bar]` with only `foo` defined is
+ * literal. The first pair doubles as the label only if it holds no brackets
+ * of its own. */
 Target reference_target(str source, List<int> shuts, Map<str, MD_doc.Reference> references, int open, int shut) {
     Target none = Target(false, "", "", open);
     if (references.size() == 0) {
@@ -625,9 +625,9 @@ Target reference_target(str source, List<int> shuts, Map<str, MD_doc.Reference> 
         key = normalize_label(source.substr(after + 1, label_stop - 1));
         stop = label_stop;
     } else {
-        // Too long to be a label, or holding a bracket: not one. The scan is
-        // bounded by the length test first, so it costs one label's worth at
-        // most.
+        /* Too long to be a label, or holding a bracket: not one. The scan is
+         * bounded by the length test first, so it costs one label's worth at
+         * most. */
         if (shut - open > LABEL_LIMIT + 1) {
             return none;
         }
@@ -762,8 +762,8 @@ int skip_whitespace(str source, int start) {
     return index;
 }
 
-/// Backslash escapes resolved, for text that is about to become an attribute
-/// rather than inline content.
+/** Backslash escapes resolved, for text that is about to become an attribute
+ * rather than inline content. */
 pub str unescape(str source) {
     if (source.index_of("\\").is_none()) {
         return source;
@@ -812,21 +812,21 @@ str strip_tags(str source) {
 
 // --- emphasis ----------------------------------------------------------------
 
-// CommonMark's "process emphasis", and it is reproduced here down to the
-// parts that look like accidents, because they decide real documents:
-//
-//   * closers are walked left to right; for each, openers are walked
-//     backwards to the `bottom` for that character;
-//   * `bottom` is raised when a closer finds nothing -- but ONLY if the last
-//     candidate it looked at was not refused by the rule of three, because a
-//     `**` that fails to match an earlier `*` may still become an opener;
-//   * `is_odd_match` therefore leaks out of the search loop carrying the LAST
-//     candidate's verdict, which is what makes `_c` on the line above change
-//     whether `**a*b**` is strong. That is not a typo here; it is what the
-//     reference implementation does, and matching it is the point.
-//
-// A matched pair spends two delimiters if both runs have two, otherwise one,
-// and everything still on the stack between the pair comes off it.
+/* CommonMark's "process emphasis", and it is reproduced here down to the
+ * parts that look like accidents, because they decide real documents:
+ *
+ *   * closers are walked left to right; for each, openers are walked
+ *     backwards to the `bottom` for that character;
+ *   * `bottom` is raised when a closer finds nothing -- but ONLY if the last
+ *     candidate it looked at was not refused by the rule of three, because a
+ *     `**` that fails to match an earlier `*` may still become an opener;
+ *   * `is_odd_match` therefore leaks out of the search loop carrying the LAST
+ *     candidate's verdict, which is what makes `_c` on the line above change
+ *     whether `**a*b**` is strong. That is not a typo here; it is what the
+ *     reference implementation does, and matching it is the point.
+ *
+ * A matched pair spends two delimiters if both runs have two, otherwise one,
+ * and everything still on the stack between the pair comes off it. */
 void emphasis(List<Node> nodes) {
     List<int> delimiters = [];
     for (int i in 0 .. nodes.size()) {
@@ -910,8 +910,8 @@ void emphasis(List<Node> nodes) {
     }
 }
 
-// The node index of the nearest delimiter still on the stack before `closer_slot`, or
-// -1 for the bottom of it.
+/* The node index of the nearest delimiter still on the stack before `closer_slot`, or
+ * -1 for the bottom of it. */
 int alive_before(List<Node> nodes, List<int> delimiters, int closer_slot) {
     int opener_slot = closer_slot - 1;
     while (opener_slot >= 0) {

@@ -1,18 +1,18 @@
-// The renderer: a `doc.Block` tree to HTML.
-//
-// The line breaks follow cmark's, and they are produced the way cmark
-// produces them: every block asks for a newline with `ensure_newline()`, which writes one
-// only if the output does not already end in one. Getting that rule right is
-// most of what makes the output comparable with a reference implementation --
-// the tags are easy and the whitespace is not.
+/* The renderer: a `doc.Block` tree to HTML.
+ *
+ * The line breaks follow cmark's, and they are produced the way cmark
+ * produces them: every block asks for a newline with `ensure_newline()`, which writes one
+ * only if the output does not already end in one. Getting that rule right is
+ * most of what makes the output comparable with a reference implementation --
+ * the tags are easy and the whitespace is not. */
 import MD_doc;
 import encoding.html;
 import MD_inlines;
 import text;
 
-// An output buffer that knows whether it is at the start of a line. Text is
-// pushed onto a list and joined once, because building a megabyte of HTML
-// with `+` is quadratic.
+/* An output buffer that knows whether it is at the start of a line. Text is
+ * pushed onto a list and joined once, because building a megabyte of HTML
+ * with `+` is quadratic. */
 type Out {
     List<str> parts;
     bool is_at_line_start;
@@ -64,9 +64,9 @@ void block(Out out, MD_doc.Block current_block, bool is_tight) {
             out.ensure_newline();
         }
         case Paragraph(str raw): {
-            // Inside a tight list a paragraph has no tags at all. That is
-            // what "tight" means, and it is why the flag has to reach this
-            // far down.
+            /* Inside a tight list a paragraph has no tags at all. That is
+             * what "tight" means, and it is why the flag has to reach this
+             * far down. */
             if (is_tight) {
                 out.put(MD_inlines.render(raw, out.references));
             } else {
@@ -195,8 +195,8 @@ str align_attribute(List<int> align, int column) {
     return "";
 }
 
-// The language of a fence: the first word of its info string. The rest of it
-// is dropped, which is what cmark does with "``` ruby extra words".
+/* The language of a fence: the first word of its info string. The rest of it
+ * is dropped, which is what cmark does with "``` ruby extra words". */
 str first_word(str info) {
     List<str> words = text.split_whitespace(info);
     if (words.size() == 0) {

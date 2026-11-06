@@ -1,17 +1,17 @@
-// markdown -- a CommonMark subset to HTML.
-//
-//   markdown README.md               the HTML fragment, on standard output
-//   markdown --full --title T f.md   a whole document around it
-//   markdown --full --theme bulma f.md   ... styled by Bulma (a CDN link)
-//   markdown --full --css site.css f.md  ... plus a stylesheet of your own
-//   markdown --out page.html f.md    write there instead of standard output
-//   markdown --watch f.md --out page.html   rebuild whenever f.md changes
-//   markdown                         reads standard input
-//
-// The grammar is Oro's (`lib/args`): `-word` is a command, so the short form of
-// `--out` is `--o` and `-o` is refused; also `--version`, `--completions SHELL`.
-//
-// See README.md for what of CommonMark is in, what is out, and why.
+/* markdown -- a CommonMark subset to HTML.
+ *
+ *   markdown README.md               the HTML fragment, on standard output
+ *   markdown --full --title T f.md   a whole document around it
+ *   markdown --full --theme bulma f.md   ... styled by Bulma (a CDN link)
+ *   markdown --full --css site.css f.md  ... plus a stylesheet of your own
+ *   markdown --out page.html f.md    write there instead of standard output
+ *   markdown --watch f.md --out page.html   rebuild whenever f.md changes
+ *   markdown                         reads standard input
+ *
+ * The grammar is Oro's (`lib/args`): `-word` is a command, so the short form of
+ * `--out` is `--o` and `-o` is refused; also `--version`, `--completions SHELL`.
+ *
+ * See README.md for what of CommonMark is in, what is out, and why. */
 import args;
 import io;
 import os;
@@ -19,8 +19,8 @@ import MD_build;
 import MD_theme;
 import MD_watch;
 
-// Standard input, whole. `io.read_line_of` would do it a line at a time and
-// this program needs all of it anyway.
+/* Standard input, whole. `io.read_line_of` would do it a line at a time and
+ * this program needs all of it anyway. */
 Result<str, io.Error> read_stdin() {
     io.File input = io.stdin();
     bytes raw = input.read_all()?;
@@ -114,7 +114,7 @@ int run(args.Parsed options, int watch_limit) {
 }
 
 // Keep in step with `version` in the `deps` file.
-const str VERSION = "0.5.0";
+const str VERSION = "0.5.1";
 
 args.Parser parser = args.Parser("markdown", summary: "CommonMark (a subset) to HTML");
 parser.version = VERSION;

@@ -1,34 +1,34 @@
-// `--watch`: render once, then render again whenever the input (or a local
-// `--css` file) changes, until the process is killed.
-//
-// How a change is noticed: every POLL_MS the input is `stat`ed and its size
-// and modification time (nanoseconds) compared with the last look. Size is
-// there because some file systems stamp a write with a coarse clock; two
-// different edits in one tick still differ in length almost always. The
-// stamp is taken BEFORE the file is read, so a write that lands while a
-// build is running is seen on the next look and built again, never lost.
-//
-// What it survives, because an editor does all of these to a file in the
-// course of an ordinary save:
-//   - the input missing for a moment (save by rename: the old name is
-//     unlinked, the new file moved in): no build is attempted until it is
-//     back, and its return, whatever it holds, is a change;
-//   - a build that fails (unreadable input, bad `--css`): the error is
-//     printed and the OLD output stays where it is, so a browser pointed at
-//     it keeps showing the last good page; the next change is tried afresh.
-//
-// What it does not do: inject a reload script, or tell the browser anything.
-// The output is a plain file; refresh the page. Writing is atomic -- a
-// temporary file in the output's own directory, then `fs.rename` over it --
-// so a refresh never lands on half a file.
+/* `--watch`: render once, then render again whenever the input (or a local
+ * `--css` file) changes, until the process is killed.
+ *
+ * How a change is noticed: every POLL_MS the input is `stat`ed and its size
+ * and modification time (nanoseconds) compared with the last look. Size is
+ * there because some file systems stamp a write with a coarse clock; two
+ * different edits in one tick still differ in length almost always. The
+ * stamp is taken BEFORE the file is read, so a write that lands while a
+ * build is running is seen on the next look and built again, never lost.
+ *
+ * What it survives, because an editor does all of these to a file in the
+ * course of an ordinary save:
+ *   - the input missing for a moment (save by rename: the old name is
+ *     unlinked, the new file moved in): no build is attempted until it is
+ *     back, and its return, whatever it holds, is a change;
+ *   - a build that fails (unreadable input, bad `--css`): the error is
+ *     printed and the OLD output stays where it is, so a browser pointed at
+ *     it keeps showing the last good page; the next change is tried afresh.
+ *
+ * What it does not do: inject a reload script, or tell the browser anything.
+ * The output is a plain file; refresh the page. Writing is atomic -- a
+ * temporary file in the output's own directory, then `fs.rename` over it --
+ * so a refresh never lands on half a file. */
 import date;
 import fs;
 import io;
 import timer;
 import MD_build;
 
-// How often the files are looked at. Short enough to feel instant after a
-// save, long enough that an idle watcher costs nothing.
+/* How often the files are looked at. Short enough to feel instant after a
+ * save, long enough that an idle watcher costs nothing. */
 const int POLL_MS = 300;
 
 // One file's stamp: "size:mtime_ns", or "-" for a file that is not there.
@@ -48,8 +48,8 @@ str clock() {
     return date.iso(date.now()).substr(11, 19);
 }
 
-// A line on standard output, flushed at once (`print` would hold it back
-// while the output is a pipe or a file, and a watcher is read live).
+/* A line on standard output, flushed at once (`print` would hold it back
+ * while the output is a pipe or a file, and a watcher is read live). */
 void say(str line) {
     io.File output = io.stdout();
     Result<int, io.Error> wrote = output.write((clock() + " " + line + "\n").to_bytes());
@@ -117,10 +117,10 @@ bool did_rebuild(MD_build.Job job, str out_path) {
     return false;
 }
 
-/// Watch `job.input` and write the result to `out_path`. Returns only when
-/// `limit` (> 0) builds have worked, with 0; a limit of 0 is for ever. An
-/// input that is not there to begin with is a mistake in the command line
-/// and is 1; one that goes away later is waited for.
+/** Watch `job.input` and write the result to `out_path`. Returns only when
+ * `limit` (> 0) builds have worked, with 0; a limit of 0 is for ever. An
+ * input that is not there to begin with is a mistake in the command line
+ * and is 1; one that goes away later is waited for. */
 pub int run(MD_build.Job job, str out_path, int limit) {
     if (!fs.is_present(job.input)) {
         complain(job.input + ": no such file");
@@ -133,8 +133,8 @@ pub int run(MD_build.Job job, str out_path, int limit) {
     say("watching " + job.input + " -> " + out_path + " (every " + str(POLL_MS) + " ms; Ctrl-C to stop)");
     int built = 0;
     bool was_missing = false;
-    // No stamp is empty, so the first look always differs: that is the
-    // build at start-up.
+    /* No stamp is empty, so the first look always differs: that is the
+     * build at start-up. */
     str seen = "";
     while (true) {
         str input_stamp = stamp_of(job.input);

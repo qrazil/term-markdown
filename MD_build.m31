@@ -1,8 +1,8 @@
-// One conversion, from the text of a markdown file to the text of the output:
-// the fragment, or with `--full` the page around it. `main` calls it once;
-// `--watch` (MD_watch) calls it every time the input changes. Nothing here
-// reads the input or writes the output, so both callers are free to do that
-// their own way.
+/* One conversion, from the text of a markdown file to the text of the output:
+ * the fragment, or with `--full` the page around it. `main` calls it once;
+ * `--watch` (MD_watch) calls it every time the input changes. Nothing here
+ * reads the input or writes the output, so both callers are free to do that
+ * their own way. */
 import io;
 import MD_blocks;
 import MD_doc;
@@ -10,11 +10,11 @@ import MD_render;
 import MD_theme;
 import MD_title;
 
-/// What the command line asked of one conversion.
-///
-/// `input` is the path as typed ("" or "-" for standard input), which only
-/// the default `--full` title looks at. `title` is "" when `--title` was not
-/// given, and `css` is "" when `--css` was not.
+/** What the command line asked of one conversion.
+ *
+ * `input` is the path as typed ("" or "-" for standard input), which only
+ * the default `--full` title looks at. `title` is "" when `--title` was not
+ * given, and `css` is "" when `--css` was not. */
 pub type Job {
     pub str input;
     pub bool is_full;
@@ -23,14 +23,14 @@ pub type Job {
     pub str css;
 }
 
-/// Does `--css` name a file, which is read, rather than a URL, which is only
-/// linked? `--watch` watches the former.
+/** Does `--css` name a file, which is read, rather than a URL, which is only
+ * linked? `--watch` watches the former. */
 pub bool Job.has_css_file() {
     return css.size() > 0 && !MD_theme.is_url(css);
 }
 
-// The extra stylesheet for `--css`, as the page wants it: (a URL to link,
-// CSS text to inline). One of them is "" and so, with no `--css`, is the other.
+/* The extra stylesheet for `--css`, as the page wants it: (a URL to link,
+ * CSS text to inline). One of them is "" and so, with no `--css`, is the other. */
 Result<List<str>, str> extra_css(str reference) {
     if (reference.size() == 0) {
         return Result<List<str>, str>.Ok(["", ""]);
@@ -51,9 +51,9 @@ Result<List<str>, str> extra_css(str reference) {
     }
 }
 
-/// The output for `source`, or why it cannot be built (an unreadable or
-/// unsuitable `--css` file). Markdown itself has no errors: any text is a
-/// document.
+/** The output for `source`, or why it cannot be built (an unreadable or
+ * unsuitable `--css` file). Markdown itself has no errors: any text is a
+ * document. */
 pub Result<str, str> convert(Job job, str source) {
     MD_doc.Document tree = MD_blocks.parse(source);
     str body = MD_render.document(tree);

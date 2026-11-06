@@ -1,14 +1,14 @@
-// The document tree.
-//
-// One module for the shape alone, so that `blocks` (which builds it) and
-// `render` (which walks it) can both name it without importing each other.
-//
-// A block's inline content is kept as the RAW markdown source of that block,
-// not as a parsed inline tree: the inline parser runs at render time, over a
-// `str`. That is a deliberate simplification -- CommonMark needs a block pass
-// to finish before inlines are parsed (a link reference definition can be
-// declared after its use), and keeping the raw text is how that ordering is
-// expressed without a second tree.
+/* The document tree.
+ *
+ * One module for the shape alone, so that `blocks` (which builds it) and
+ * `render` (which walks it) can both name it without importing each other.
+ *
+ * A block's inline content is kept as the RAW markdown source of that block,
+ * not as a parsed inline tree: the inline parser runs at render time, over a
+ * `str`. That is a deliberate simplification -- CommonMark needs a block pass
+ * to finish before inlines are parsed (a link reference definition can be
+ * declared after its use), and keeping the raw text is how that ordering is
+ * expressed without a second tree. */
 
 /// `# text` and `text\n====`. `level` is 1 to 6.
 pub type Heading {
@@ -16,9 +16,9 @@ pub type Heading {
     pub str text;
 }
 
-/// A fenced or indented code block. `info` is the fence's info string, ""
-/// for an indented block or a bare fence. `body` ends with a newline unless
-/// it is empty.
+/** A fenced or indented code block. `info` is the fence's info string, ""
+ * for an indented block or a bare fence. `body` ends with a newline unless
+ * it is empty. */
 pub type Code {
     pub str info;
     pub str body;
@@ -34,9 +34,9 @@ pub type Item {
     pub List<Block> kids;
 }
 
-/// A bullet or ordered list. `start` is the first number of an ordered list
-/// and is ignored for a bullet one. An `is_tight` list renders its items'
-/// paragraphs without `<p>`.
+/** A bullet or ordered list. `start` is the first number of an ordered list
+ * and is ignored for a bullet one. An `is_tight` list renders its items'
+ * paragraphs without `<p>`. */
 pub type Listing {
     pub bool is_ordered;
     pub int start;
@@ -44,9 +44,9 @@ pub type Listing {
     pub List<Item> items;
 }
 
-/// A GFM pipe table. `align` holds one of `ALIGN_NONE`, `ALIGN_LEFT`,
-/// `ALIGN_CENTER`, `ALIGN_RIGHT` per column; every row is padded or cut to
-/// the header's width, which is what GFM says to do.
+/** A GFM pipe table. `align` holds one of `ALIGN_NONE`, `ALIGN_LEFT`,
+ * `ALIGN_CENTER`, `ALIGN_RIGHT` per column; every row is padded or cut to
+ * the header's width, which is what GFM says to do. */
 pub type Table {
     pub List<str> heads;
     pub List<int> align;
@@ -58,9 +58,9 @@ pub const int ALIGN_LEFT = 1;
 pub const int ALIGN_CENTER = 2;
 pub const int ALIGN_RIGHT = 3;
 
-/// Everything this subset can parse. There is no `Html` variant: raw HTML is
-/// not in the subset, and a `<div>` on its own line is an ordinary paragraph
-/// whose angle brackets are escaped (README, "What is left out").
+/** Everything this subset can parse. There is no `Html` variant: raw HTML is
+ * not in the subset, and a `<div>` on its own line is an ordinary paragraph
+ * whose angle brackets are escaped (README, "What is left out"). */
 pub enum Block {
     /// `***`, `---`, `___`
     Rule;
@@ -73,19 +73,19 @@ pub enum Block {
     Grid(Table);
 }
 
-/// A link reference definition, `[label]: /url "title"`: where a reference
-/// link or image sent to `label` points. `href` is the destination with its
-/// backslash escapes resolved and `title` the title likewise, "" for none.
-/// Neither is HTML-escaped yet; the renderer does that, as it does for an
-/// inline link.
+/** A link reference definition, `[label]: /url "title"`: where a reference
+ * link or image sent to `label` points. `href` is the destination with its
+ * backslash escapes resolved and `title` the title likewise, "" for none.
+ * Neither is HTML-escaped yet; the renderer does that, as it does for an
+ * inline link. */
 pub type Reference {
     pub str href;
     pub str title;
 }
 
-/// A parsed document: its blocks, and every definition found anywhere in it
-/// (inside a block quote or a list item too), keyed by the label as
-/// `MD_inlines.normalize_label` writes it. Definitions leave no block behind.
+/** A parsed document: its blocks, and every definition found anywhere in it
+ * (inside a block quote or a list item too), keyed by the label as
+ * `MD_inlines.normalize_label` writes it. Definitions leave no block behind. */
 pub type Document {
     pub List<Block> blocks;
     pub Map<str, Reference> references;

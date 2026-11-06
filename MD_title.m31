@@ -1,17 +1,17 @@
-// The title of a `--full` document when `--title` was not given: the text of
-// the first level-1 heading, else the file name without its extension, else
-// "Document".
-//
-// Plain text throughout; escaping is the page's job (`MD_theme.page`), done
-// once, so that a title is never escaped twice or not at all.
+/* The title of a `--full` document when `--title` was not given: the text of
+ * the first level-1 heading, else the file name without its extension, else
+ * "Document".
+ *
+ * Plain text throughout; escaping is the page's job (`MD_theme.page`), done
+ * once, so that a title is never escaped twice or not at all. */
 import MD_doc;
 import MD_inlines;
 import text;
 
 const str FALLBACK = "Document";
 
-/// The title for a document read from `path` ("" or "-" for standard input)
-/// which `parsed` is.
+/** The title for a document read from `path` ("" or "-" for standard input)
+ * which `parsed` is. */
 pub str default_title(MD_doc.Document parsed, str path) {
     for (MD_doc.Block current_block in parsed.blocks) {
         match (current_block) {
@@ -44,9 +44,9 @@ pub str default_title(MD_doc.Document parsed, str path) {
     return FALLBACK;
 }
 
-/// The last component of `path` without its last extension: `docs/a.b.md` is
-/// `a.b`. A leading dot is part of the name (`.md` has no extension), and
-/// standard input (`-`) has no name.
+/** The last component of `path` without its last extension: `docs/a.b.md` is
+ * `a.b`. A leading dot is part of the name (`.md` has no extension), and
+ * standard input (`-`) has no name. */
 pub str file_stem(str path) {
     if (path == "-") {
         return "";
@@ -65,10 +65,10 @@ pub str file_stem(str path) {
     return stem;
 }
 
-/// `rendered`, one inline's HTML, as plain text: tags removed (an image
-/// leaves its `alt`), whitespace collapsed to single spaces, entities
-/// resolved. Only the five that `html.escape` writes can be there, because
-/// the inline parser decodes no others.
+/** `rendered`, one inline's HTML, as plain text: tags removed (an image
+ * leaves its `alt`), whitespace collapsed to single spaces, entities
+ * resolved. Only the five that `html.escape` writes can be there, because
+ * the inline parser decodes no others. */
 pub str plain_text(str rendered) {
     List<str> pieces = [];
     int length = rendered.size();
@@ -120,8 +120,8 @@ str image_alt(str tag) {
     }
 }
 
-// The inverse of `html.escape`. `&amp;` goes last so that `&amp;lt;` becomes
-// `&lt;` and stops there.
+/* The inverse of `html.escape`. `&amp;` goes last so that `&amp;lt;` becomes
+ * `&lt;` and stops there. */
 str unescape(str escaped) {
     str result = text.replace(escaped, "&lt;", "<");
     result = text.replace(result, "&gt;", ">");

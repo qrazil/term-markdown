@@ -1,14 +1,14 @@
-// The page around the HTML that `--full` writes: the embedded stylesheet, the
-// choice between the three themes, and the head and body that carry them.
-//
-// The default theme is classless -- it styles the plain semantic HTML that
-// `MD_render` writes, so no class is ever added to the fragment -- and
-// self-contained: nothing is fetched, the page works offline. Light and dark
-// are the same rules over two sets of CSS custom properties.
-//
-// The CSS is written one `push` per line because the language has no
-// multi-line string literal. It uses single quotes throughout so that no
-// element needs an escape.
+/* The page around the HTML that `--full` writes: the embedded stylesheet, the
+ * choice between the three themes, and the head and body that carry them.
+ *
+ * The default theme is classless -- it styles the plain semantic HTML that
+ * `MD_render` writes, so no class is ever added to the fragment -- and
+ * self-contained: nothing is fetched, the page works offline. Light and dark
+ * are the same rules over two sets of CSS custom properties.
+ *
+ * The CSS is written one `push` per line because the language has no
+ * multi-line string literal. It uses single quotes throughout so that no
+ * element needs an escape. */
 import encoding.html;
 import MD_inlines;
 
@@ -28,10 +28,10 @@ pub bool is_url(str reference) {
     return lowered.starts_with("http://") || lowered.starts_with("https://");
 }
 
-/// Can `css` sit inside a `<style>` element? Not if it contains `</style`
-/// in any case: the HTML parser would end the element there and read the rest
-/// as markup. CSS has no use for the sequence outside a string or a comment,
-/// so it is refused rather than rewritten.
+/** Can `css` sit inside a `<style>` element? Not if it contains `</style`
+ * in any case: the HTML parser would end the element there and read the rest
+ * as markup. CSS has no use for the sequence outside a string or a comment,
+ * so it is refused rather than rewritten. */
 pub bool can_inline(str css) {
     return !css.to_lower().contains("</style");
 }
@@ -158,12 +158,12 @@ str link_element(str url) {
     return "<link rel=\"stylesheet\" href=\"" + MD_inlines.escape_href(url) + "\" />\n";
 }
 
-/// A whole document around `body`, an HTML fragment.
-///
-/// `title` is plain text and is escaped here. `theme` is one of the names
-/// `is_theme` accepts. `css_url` is an extra stylesheet to link, `css_text`
-/// one to inline (the caller has checked it with `can_inline`); each is ""
-/// when there is none, and both come after the theme's own CSS.
+/** A whole document around `body`, an HTML fragment.
+ *
+ * `title` is plain text and is escaped here. `theme` is one of the names
+ * `is_theme` accepts. `css_url` is an extra stylesheet to link, `css_text`
+ * one to inline (the caller has checked it with `can_inline`); each is ""
+ * when there is none, and both come after the theme's own CSS. */
 pub str page(str body, str title, str theme, str css_url, str css_text) {
     List<str> out = [];
     out.push("<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\" />\n");
