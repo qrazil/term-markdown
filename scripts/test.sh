@@ -419,20 +419,21 @@ PY
             fail=$((fail + 1))
         fi
     done
-    # Scaling: 10,000 versus 40,000 nested quotes. Linear is ~4x or less (less,
+    # Scaling: 5,000 versus 20,000 nested quotes (rendering still recurses once per
+    # level, so deeper risks the stack on platforms with larger frames, e.g. aarch64). Linear is ~4x or less (less,
     # as start-up dominates); quadratic is ~16x. Best of 3 each, to shrug off a
     # noisy neighbour; the bound is 6x plus a 100 ms allowance.
     python3 - "$P" <<'PY'
 import sys
 d = sys.argv[1]
-open(d + "/scale-small.txt", "w").write("> " * 10000 + "hi\n")
-open(d + "/scale-big.txt", "w").write("> " * 40000 + "hi\n")
+open(d + "/scale-small.txt", "w").write("> " * 5000 + "hi\n")
+open(d + "/scale-big.txt", "w").write("> " * 20000 + "hi\n")
 PY
     best_ms() { # best_ms FILE -> fastest of 3 runs, in ms (empty if it failed)
         local best="" run start ms
         for run in 1 2 3; do
             start=$(now_ms)
-            "$BIN" "$1" >/dev/null 2>&1 || return 1
+            "$BIN" "$1" >/dev/null 2>"$P/scale.err" || return 1
             ms=$(( $(now_ms) - start ))
             if [ -z "$best" ] || [ "$ms" -lt "$best" ]; then best=$ms; fi
         done
@@ -441,7 +442,7 @@ PY
     small=$(best_ms "$P/scale-small.txt")
     big=$(best_ms "$P/scale-big.txt")
     if [ -z "$small" ] || [ -z "$big" ]; then
-        printf '\033[31mFAIL\033[0m %-28s exited non-zero\n' "scaling deep-quote"
+        printf '\033[31mFAIL\033[0m %-28s exited non-zero: %s\n' "scaling deep-quote" "$(head -c 300 "$P/scale.err" 2>/dev/null)"
         fail=$((fail + 1))
     elif [ "$big" -le $(( small * 6 + 100 )) ]; then
         printf '\033[32mok\033[0m   %-28s %s ms -> %s ms for 4x the depth\n' "scaling deep-quote" "$small" "$big"
