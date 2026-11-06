@@ -114,7 +114,7 @@ int run(args.Parsed options, int watch_limit) {
 }
 
 // Keep in step with `version` in the `deps` file.
-const str VERSION = "0.5.1";
+const str VERSION = "0.5.2";
 
 args.Parser parser = args.Parser("markdown", summary: "CommonMark (a subset) to HTML");
 parser.version = VERSION;

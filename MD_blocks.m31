@@ -439,8 +439,50 @@ int block_quote(List<MD_doc.Block> out, List<str> lines, int start_line, Map<str
         lazily(inner, line);
         line_index = line_index + 1;
     }
+    if (inner.size() == 1 && line_index == start_line + 1) {
+        out.push(nested_quotes(inner[0], references));
+        return line_index;
+    }
     out.push(MD_doc.Block.Quoted(MD_doc.Quote(parse_lines(inner, references))));
     return line_index;
+}
+
+/* A quote of exactly one line, `body` (its own marker already stripped). If
+ * `body` starts with another `>`, the recursion would strip one marker per
+ * level, copying the whole remaining line each time: quadratic in the depth
+ * on `> > > > ...`. Walk the markers by offset instead, copy the rest once,
+ * parse that, and wrap it once per level. The result is the same tree: each
+ * level of the recursion would have seen exactly this one line, and a line
+ * starting (under 4 spaces of indent) with `>` can only be a quote. */
+MD_doc.Block nested_quotes(str body, Map<str, MD_doc.Reference> references) {
+    int length = body.size();
+    int pos = 0;
+    int depth = 1;
+    bool is_more = true;
+    while (is_more) {
+        int at = pos;
+        while (at < length && body.byte_at(at) == ' ') {
+            at = at + 1;
+        }
+        if (at - pos < 4 && at < length && body.byte_at(at) == '>') {
+            at = at + 1;
+            if (at < length && body.byte_at(at) == ' ') {
+                at = at + 1;
+            }
+            pos = at;
+            depth = depth + 1;
+        } else {
+            is_more = false;
+        }
+    }
+    List<MD_doc.Block> blocks = parse_lines([chop(body, pos)], references);
+    MD_doc.Block wrapped = MD_doc.Block.Quoted(MD_doc.Quote(blocks));
+    for (int i in 1 .. depth) {
+        List<MD_doc.Block> level = [];
+        level.push(wrapped);
+        wrapped = MD_doc.Block.Quoted(MD_doc.Quote(level));
+    }
+    return wrapped;
 }
 
 int paragraph(List<MD_doc.Block> out, List<str> lines, int start_line, Map<str, MD_doc.Reference> references) {
